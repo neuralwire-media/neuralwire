@@ -111,7 +111,7 @@ export async function getNews(
 }
 
 /**
- * Fetch a single news article by slug.
+ * Fetch a single news article by slug directly from the backend API.
  */
 export async function getNewsBySlug(
 	slug: string,
@@ -119,28 +119,21 @@ export async function getNewsBySlug(
 ): Promise<News | null> {
 	const f = getFetch(customFetch);
 
-	// First, fetch the list of news to find the ID corresponding to this slug.
-	const articles = await getNews(customFetch);
-	const matched = articles.find((item) => item.slug === slug);
-
-	if (!matched) {
-		return null;
-	}
-
-	// Now try to fetch the detailed article by ID from the backend API.
 	try {
-		const res = await f(`${BASE_URL}/news/${matched.id}`, { signal: AbortSignal.timeout(2000) });
+		const res = await f(`${BASE_URL}/news/${encodeURIComponent(slug)}`, {
+			signal: AbortSignal.timeout(3000)
+		});
 		if (res.ok) {
-			const detailed = await res.json();
-			if (detailed) {
-				return detailed;
+			const data = await res.json();
+			if (data && data.id && data.status === 'published') {
+				return data as News;
 			}
 		}
 	} catch (e) {
-		console.warn(`Backend news detail API for ID ${matched.id} unreachable, using mock detail.`, e);
+		console.warn(`Backend news detail API for slug '${slug}' unreachable:`, e);
 	}
 
-	return matched;
+	return null;
 }
 
 /**

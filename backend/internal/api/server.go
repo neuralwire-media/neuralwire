@@ -18,6 +18,7 @@ import (
 	"neuralwire/backend/internal/cache"
 	"neuralwire/backend/internal/fetcher"
 	"neuralwire/backend/internal/metrics"
+	"neuralwire/backend/internal/models"
 	"neuralwire/backend/internal/ratelimit"
 	"neuralwire/backend/internal/repository"
 	"neuralwire/backend/internal/scheduler"
@@ -248,8 +249,9 @@ func (s *Server) Handler() http.Handler {
 	}
 
 	// Serve the built frontend when a static directory is configured. The
-	// SPA fallback returns index.html for unknown non-API routes so client
-	// side routing works (e.g. /some-article-slug).
+	// SPA fallback returns index.html for valid frontend routes so client
+	// side routing works (e.g. /some-article-slug). Unknown or non-existent
+	// routes return HTTP 404 to avoid Soft 404 indexation.
 	if s.staticDir != "" {
 		if info, err := os.Stat(s.staticDir); err == nil && info.IsDir() {
 			fileServer := http.FileServer(http.Dir(s.staticDir))
@@ -258,11 +260,15 @@ func (s *Server) Handler() http.Handler {
 				if path == "/" {
 					path = "/index.html"
 				}
-				// Let the file server decide; if the asset does not exist,
-				// fall back to index.html for SPA routes.
+				// If the asset exists on disk, serve it directly.
 				candidate := http.Dir(s.staticDir)
 				if _, err := candidate.Open(strings.TrimPrefix(path, "/")); err != nil {
-					http.ServeFile(w, r, filepath.Join(s.staticDir, "index.html"))
+					cleanPath := strings.Trim(r.URL.Path, "/")
+					if s.isValidFrontendRoute(cleanPath) {
+						http.ServeFile(w, r, filepath.Join(s.staticDir, "index.html"))
+						return
+					}
+					s.serveNotFound(w, r)
 					return
 				}
 				fileServer.ServeHTTP(w, r)
@@ -296,4 +302,84 @@ func (s *Server) writeJSON(w http.ResponseWriter, status int, v any) {
 
 func (s *Server) writeError(w http.ResponseWriter, status int, message string) {
 	s.writeJSON(w, status, map[string]string{"error": message})
+}
+
+// isValidFrontendRoute checks whether the requested path corresponds to a
+// known frontend route (e.g. root, about, search, copyright, admin, category,
+// or a published article slug). If not, the request should receive a real 404
+// instead of index.html to prevent Soft 404 indexing.
+func (s *Server) isValidFrontendRoute(cleanPath string) bool {
+	switch cleanPath {
+	case "", "about", "copyright", "search":
+		return true
+	}
+
+	if cleanPath == "admin" || strings.HasPrefix(cleanPath, "admin/") {
+		return true
+	}
+
+	if strings.HasPrefix(cleanPath, "category/") {
+		catSlug := strings.TrimPrefix(cleanPath, "category/")
+		if catSlug == "" || strings.Contains(catSlug, "/") {
+			return false
+		}
+		if s.categoryRepo != nil {
+			exists, err := s.categoryRepo.ExistsBySlug(catSlug)
+			if err != nil || !exists {
+				return false
+			}
+		}
+		return true
+	}
+
+	// Dynamic article route: /{slug}
+	if !strings.Contains(cleanPath, "/") {
+		if s.newsRepo != nil {
+			news, err := s.newsRepo.GetBySlug(cleanPath)
+			if err != nil || news == nil || news.Status != models.StatusPublished {
+				return false
+			}
+		}
+		return true
+	}
+
+	return false
+}
+
+// serveNotFound responds with HTTP 404 and a clean error page or JSON.
+func (s *Server) serveNotFound(w http.ResponseWriter, r *http.Request) {
+	cleanPath := strings.Trim(r.URL.Path, "/")
+	if strings.HasPrefix(cleanPath, "api/") || cleanPath == "api" {
+		s.writeError(w, http.StatusNotFound, "endpoint not found")
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+	w.WriteHeader(http.StatusNotFound)
+	_, _ = w.Write([]byte(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>404 Not Found — Neuralwire</title>
+  <style>
+    body { background: #0A0E17; color: #F8FAFC; font-family: ui-sans-serif, system-ui, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .container { text-align: center; padding: 2rem; max-width: 28rem; }
+    h1 { font-size: 3.75rem; font-weight: 700; color: #22D3EE; margin: 0 0 0.5rem; font-family: monospace; }
+    h2 { font-size: 1.25rem; font-weight: 500; margin: 0 0 1rem; color: #E2E8F0; }
+    p { color: #94A3B8; font-size: 0.875rem; margin-bottom: 2rem; line-height: 1.5; }
+    a { display: inline-block; background: rgba(34,211,238,0.1); color: #22D3EE; border: 1px solid rgba(34,211,238,0.3); padding: 0.625rem 1.25rem; border-radius: 0.5rem; text-decoration: none; font-size: 0.875rem; font-weight: 500; transition: all 0.2s; }
+    a:hover { background: rgba(34,211,238,0.2); border-color: #22D3EE; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>404</h1>
+    <h2>Page Not Found</h2>
+    <p>The page or article you are looking for does not exist, has been removed, or is not yet published.</p>
+    <a href="/">Return to Homepage</a>
+  </div>
+</body>
+</html>`))
 }
