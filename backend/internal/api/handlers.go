@@ -85,8 +85,8 @@ func (s *Server) handleSitemap(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusInternalServerError, "internal server error")
 		return
 	}
-	// Fetch up to 1000 published articles (max page size is 100).
-	articles, _, err := s.newsRepo.ListPublished("", "", 1, 100)
+	// Fetch up to 1000 published articles.
+	articles, _, err := s.newsRepo.ListPublished("", "", 1, 1000)
 	if err != nil {
 		s.slog.Error("api: sitemap news", "error", err)
 		s.writeError(w, http.StatusInternalServerError, "internal server error")
@@ -110,10 +110,12 @@ func (s *Server) handleSitemap(w http.ResponseWriter, r *http.Request) {
 
 	writeURL("/", time.Now().UTC().Format("2006-01-02"), "daily", "1.0")
 	writeURL("/about", "", "monthly", "0.5")
-	writeURL("/search", "", "weekly", "0.4")
 
 	for _, c := range categories {
-		writeURL("/category/"+c.Slug, "", "daily", "0.6")
+		_, count, err := s.newsRepo.ListPublished(c.Slug, "", 1, 1)
+		if err == nil && count > 0 {
+			writeURL("/category/"+c.Slug, "", "daily", "0.6")
+		}
 	}
 
 	for _, a := range articles {
@@ -268,9 +270,11 @@ func randomHex(n int) (string, error) {
 // single block, disable that setting (Bots -> Managed robots.txt -> Off).
 func (s *Server) handleRobotsTXT(w http.ResponseWriter, r *http.Request) {
 	origin := s.sitemapOrigin(r)
-	body := "# allow crawling everywhere except the admin panel\n" +
+	body := "# allow crawling everywhere except admin, search, and internal api\n" +
 		"User-agent: *\n" +
 		"Disallow: /admin\n" +
+		"Disallow: /search\n" +
+		"Disallow: /api/\n" +
 		"Allow: /\n\n" +
 		"# Block AI training / scraping crawlers\n" +
 		"User-agent: Amazonbot\nDisallow: /\n" +
@@ -331,16 +335,25 @@ func (s *Server) handleListNews(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleGetNews returns a single published article identified either by its
+// numeric ID or by its unique URL slug.
 func (s *Server) handleGetNews(w http.ResponseWriter, r *http.Request) {
-	id, err := pathID(r)
-	if err != nil {
-		s.writeError(w, http.StatusBadRequest, "invalid news id")
+	raw := strings.TrimSpace(r.PathValue("id"))
+	if raw == "" {
+		s.writeError(w, http.StatusBadRequest, "invalid identifier")
 		return
 	}
 
-	news, err := s.newsRepo.GetByID(id)
+	var news *models.News
+	var err error
+	if id, parseErr := strconv.ParseInt(raw, 10, 64); parseErr == nil && id > 0 {
+		news, err = s.newsRepo.GetByID(id)
+	} else {
+		news, err = s.newsRepo.GetBySlug(raw)
+	}
+
 	if err != nil {
-		s.logger.Printf("api: get news %d: %v", id, err)
+		s.logger.Printf("api: get news %q: %v", raw, err)
 		s.writeError(w, http.StatusInternalServerError, "failed to load news")
 		return
 	}

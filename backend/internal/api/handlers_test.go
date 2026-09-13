@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -1204,3 +1205,207 @@ func TestCSRFProtect(t *testing.T) {
 		t.Errorf("hostile-origin POST = %d, want 403", code)
 	}
 }
+
+func TestGetNewsBySlug(t *testing.T) {
+	s := newTestServer(t)
+	token := adminToken(t, s)
+
+	// Create and publish an article
+	createBody := map[string]any{
+		"title":    "Test Published Article For Slug",
+		"url":      "https://example.com/slug-test",
+		"category": "ai",
+		"summary":  "Summary for slug test",
+	}
+	rec := doJSONAs(t, s, http.MethodPost, "/api/admin/news", createBody, token)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create article: %d", rec.Code)
+	}
+	var created struct {
+		ID   int64  `json:"id"`
+		Slug string `json:"slug"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal created: %v", err)
+	}
+
+	// Draft article by slug -> 404
+	rec = doJSON(t, s, http.MethodGet, "/api/news/"+created.Slug, nil)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("GET /api/news/%s (draft) = %d, want 404", created.Slug, rec.Code)
+	}
+
+	// Publish the article
+	rec = doJSONAs(t, s, http.MethodPost, "/api/admin/news/"+strconv.FormatInt(created.ID, 10)+"/publish", nil, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("publish article: %d", rec.Code)
+	}
+
+	// Now fetch by slug -> 200 OK
+	rec = doJSON(t, s, http.MethodGet, "/api/news/"+created.Slug, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/news/%s = %d, want 200", created.Slug, rec.Code)
+	}
+	var fetched struct {
+		ID   int64  `json:"id"`
+		Slug string `json:"slug"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &fetched); err != nil {
+		t.Fatalf("unmarshal fetched: %v", err)
+	}
+	if fetched.ID != created.ID || fetched.Slug != created.Slug {
+		t.Errorf("fetched id=%d slug=%s, want id=%d slug=%s", fetched.ID, fetched.Slug, created.ID, created.Slug)
+	}
+
+	// Non-existent slug -> 404
+	rec = doJSON(t, s, http.MethodGet, "/api/news/completely-nonexistent-slug-xyz", nil)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("GET non-existent slug = %d, want 404", rec.Code)
+	}
+}
+
+func TestSitemapAndRobots(t *testing.T) {
+	s := newTestServer(t)
+	token := adminToken(t, s)
+
+	// Publish one article
+	createBody := map[string]any{
+		"title":    "Sitemap Test Story",
+		"url":      "https://example.com/sitemap-test",
+		"category": "ai",
+	}
+	rec := doJSONAs(t, s, http.MethodPost, "/api/admin/news", createBody, token)
+	var created struct {
+		ID   int64  `json:"id"`
+		Slug string `json:"slug"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &created)
+	_ = doJSONAs(t, s, http.MethodPost, "/api/admin/news/"+strconv.FormatInt(created.ID, 10)+"/publish", nil, token)
+
+	// Check sitemap
+	req := httptest.NewRequest(http.MethodGet, "/sitemap.xml", nil)
+	rec = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("sitemap status = %d", rec.Code)
+	}
+	sitemapBody := rec.Body.String()
+	if strings.Contains(sitemapBody, "/search") {
+		t.Errorf("sitemap contains /search, should be excluded")
+	}
+	if !strings.Contains(sitemapBody, "/"+created.Slug) {
+		t.Errorf("sitemap missing published article slug /%s", created.Slug)
+	}
+
+	// Check robots.txt
+	req = httptest.NewRequest(http.MethodGet, "/robots.txt", nil)
+	rec = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("robots.txt status = %d", rec.Code)
+	}
+	robotsBody := rec.Body.String()
+	if !strings.Contains(robotsBody, "Disallow: /search") {
+		t.Errorf("robots.txt missing Disallow: /search")
+	}
+	if !strings.Contains(robotsBody, "Disallow: /api/") {
+		t.Errorf("robots.txt missing Disallow: /api/")
+	}
+}
+
+func TestStaticFallbackRouting(t *testing.T) {
+	tmpDir := t.TempDir()
+	indexHTML := `<!doctype html><html><head><title>Neuralwire</title></head><body>App</body></html>`
+	if err := os.WriteFile(tmpDir+"/index.html", []byte(indexHTML), 0644); err != nil {
+		t.Fatalf("write index.html: %v", err)
+	}
+
+	db, err := database.Open(":memory:")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	_ = database.Migrate(db)
+	_ = database.Seed(db)
+
+	newsRepo := repository.NewNewsRepository(db)
+	catRepo := repository.NewCategoryRepository(db)
+
+	s := NewServer(ServerOptions{
+		NewsRepo:     newsRepo,
+		CategoryRepo: catRepo,
+		StaticDir:    tmpDir,
+		Logger:       log.New(io.Discard, "", 0),
+	})
+	h := s.Handler()
+
+	// 1. Root -> 200 (index.html)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("GET / = %d, want 200", rec.Code)
+	}
+
+	// 2. Known static route /about -> 200 (index.html)
+	req = httptest.NewRequest(http.MethodGet, "/about", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("GET /about = %d, want 200", rec.Code)
+	}
+
+	// 3. Admin route -> 200 (index.html)
+	req = httptest.NewRequest(http.MethodGet, "/admin/drafts", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("GET /admin/drafts = %d, want 200", rec.Code)
+	}
+
+	// 4. Non-existent slug /something-missing -> 404 with noindex header
+	req = httptest.NewRequest(http.MethodGet, "/anthropic-continues-compute-gobbling-streak", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("GET unknown slug = %d, want 404", rec.Code)
+	}
+	if tag := rec.Header().Get("X-Robots-Tag"); !strings.Contains(tag, "noindex") {
+		t.Errorf("X-Robots-Tag = %q, want to contain noindex", tag)
+	}
+
+	// 5. Create a draft article -> GET /{draft-slug} must return 404
+	draftID, _ := newsRepo.Create(models.News{
+		Title:    "Secret Draft Story",
+		URL:      "https://example.com/draft-story",
+		Category: "ai",
+	})
+	draftNews, _ := newsRepo.GetByID(draftID)
+	req = httptest.NewRequest(http.MethodGet, "/"+draftNews.Slug, nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("GET draft slug = %d, want 404", rec.Code)
+	}
+
+	// 6. Publish that article -> GET /{slug} must return 200 (index.html)
+	_ = newsRepo.SetStatus(draftID, models.StatusPublished)
+	req = httptest.NewRequest(http.MethodGet, "/"+draftNews.Slug, nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("GET published slug = %d, want 200", rec.Code)
+	}
+
+	// 7. Unknown /api/nonexistent -> 404 JSON
+	req = httptest.NewRequest(http.MethodGet, "/api/unknown-endpoint", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("GET /api/unknown-endpoint = %d, want 404", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Errorf("unknown API Content-Type = %q, want application/json", ct)
+	}
+}
+

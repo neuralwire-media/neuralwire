@@ -63,3 +63,32 @@ func (r *CategoryRepository) EnsureCreated(name string) (string, error) {
 	}
 	return slug, nil
 }
+
+// ExistsBySlug reports whether a category with the given slug exists.
+func (r *CategoryRepository) ExistsBySlug(slug string) (bool, error) {
+	var exists int
+	err := r.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM categories WHERE slug = ?)`, slug).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("exists category by slug: %w", err)
+	}
+	return exists == 1, nil
+}
+
+// GetBySlug returns a category by slug, or nil if not found.
+func (r *CategoryRepository) GetBySlug(slug string) (*models.Category, error) {
+	row := r.db.QueryRow(`SELECT id, name, slug, created_at FROM categories WHERE slug = ?`, slug)
+	var c models.Category
+	var createdAt string
+	if err := row.Scan(&c.ID, &c.Name, &c.Slug, &createdAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get category by slug: %w", err)
+	}
+	t, err := parseSQLiteTime(createdAt)
+	if err != nil {
+		return nil, fmt.Errorf("parse category created_at: %w", err)
+	}
+	c.CreatedAt = t
+	return &c, nil
+}
