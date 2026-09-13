@@ -1408,4 +1408,3 @@ func TestStaticFallbackRouting(t *testing.T) {
 		t.Errorf("unknown API Content-Type = %q, want application/json", ct)
 	}
 }
-

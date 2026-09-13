@@ -383,4 +383,3 @@ func (s *Server) serveNotFound(w http.ResponseWriter, r *http.Request) {
 </body>
 </html>`))
 }
-
