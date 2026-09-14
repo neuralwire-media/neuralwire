@@ -67,10 +67,6 @@
 <svelte:head>
 	<!-- Primary SEO Meta Tags (page-level heads override with page-specific tags) -->
 	<title>Neuralwire | AI News, Neural Networks & Future Computation</title>
-	<meta
-		name="description"
-		content="An editorial news portal for artificial intelligence, neural networks, and the future of computation. Bridging the gap between silicon and humanity."
-	/>
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 	<meta name="robots" content="index, follow" />
 	<meta property="og:site_name" content="Neuralwire" />
@@ -102,11 +98,19 @@
 					class="rounded border border-[#22D3EE]/30 bg-[#22D3EE]/10 px-1.5 py-0.5 font-mono text-xs tracking-wider text-[#22D3EE] uppercase"
 					>nw</span
 				>
-				<span class="font-sans text-lg font-bold tracking-tight text-white uppercase">
-					Neural<span class="group-hover:glow-text text-[#22D3EE] transition-all duration-300"
-						>wire</span
-					>
-				</span>
+				{#if $page.url.pathname === '/'}
+					<h1 class="m-0 inline font-sans text-lg font-bold tracking-tight text-white uppercase">
+						Neural<span class="group-hover:glow-text text-[#22D3EE] transition-all duration-300"
+							>wire</span
+						>
+					</h1>
+				{:else}
+					<span class="font-sans text-lg font-bold tracking-tight text-white uppercase">
+						Neural<span class="group-hover:glow-text text-[#22D3EE] transition-all duration-300"
+							>wire</span
+						>
+					</span>
+				{/if}
 			</a>
 
 			<!-- Desktop Nav Categories -->

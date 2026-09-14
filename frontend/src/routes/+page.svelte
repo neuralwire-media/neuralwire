@@ -157,11 +157,11 @@
 
 						<!-- Hero Headline -->
 						<a href="/{featuredArticle.slug}" class="group">
-							<h1
+							<h2
 								class="line-clamp-2 font-serif text-3xl leading-tight font-medium tracking-tight text-white transition-colors group-hover:text-[#22D3EE]/90 sm:text-4xl md:text-5xl lg:text-6xl"
 							>
 								{featuredArticle.title}
-							</h1>
+							</h2>
 						</a>
 
 						<!-- Hero Summary -->
