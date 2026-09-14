@@ -1418,6 +1418,22 @@ func TestStaticFallbackRouting(t *testing.T) {
 	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
 		t.Errorf("unknown API Content-Type = %q, want application/json", ct)
 	}
+
+	// 8. Single article with Verge image -> index.html includes imagesrcset
+	vergeID, _ := newsRepo.Create(models.News{
+		Title:    "Verge AI Article",
+		URL:      "https://example.com/verge-article",
+		ImageURL: "https://platform.theverge.com/image.jpg?w=1200",
+		Category: "ai",
+	})
+	_ = newsRepo.SetStatus(vergeID, models.StatusPublished)
+	vergeNews, _ := newsRepo.GetByID(vergeID)
+	req = httptest.NewRequest(http.MethodGet, "/"+vergeNews.Slug, nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), `imagesrcset=`) {
+		t.Errorf("GET /%s missing imagesrcset in preload", vergeNews.Slug)
+	}
 }
 
 func TestCacheControlHeaders(t *testing.T) {
