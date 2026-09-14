@@ -1,4 +1,4 @@
-import { getNews, getCategories } from '$lib/api';
+import { getNewsPage, getCategories } from '$lib/api';
 import { error } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
 
@@ -13,9 +13,12 @@ export const load: PageLoad = async ({ fetch, params }) => {
 		});
 	}
 
-	const news = await getNews(fetch, slug);
+	const newsRes = await getNewsPage(fetch, slug, undefined, 1, 15);
 	return {
 		category,
-		news
+		news: newsRes.articles,
+		total: newsRes.total,
+		totalPages: newsRes.totalPages,
+		pageSize: newsRes.pageSize
 	};
 };

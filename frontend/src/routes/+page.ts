@@ -1,10 +1,16 @@
-import { getNews, getTrendingNews } from '$lib/api';
+import { getNewsPage, getTrendingNews } from '$lib/api';
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = async ({ fetch }) => {
-	const [news, trending] = await Promise.all([getNews(fetch), getTrendingNews(fetch)]);
+	const [newsRes, trending] = await Promise.all([
+		getNewsPage(fetch, undefined, undefined, 1, 15),
+		getTrendingNews(fetch)
+	]);
 	return {
-		news,
+		news: newsRes.articles,
+		total: newsRes.total,
+		totalPages: newsRes.totalPages,
+		pageSize: newsRes.pageSize,
 		trending
 	};
 };
