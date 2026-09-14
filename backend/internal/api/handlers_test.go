@@ -1553,6 +1553,7 @@ func TestCacheControlHeaders(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(tmpDir, "_app", "immutable"), 0o755)
 	_ = os.WriteFile(filepath.Join(tmpDir, "_app", "immutable", "chunk.js"), []byte("console.log(1)"), 0o644)
 	_ = os.WriteFile(filepath.Join(tmpDir, "favicon.ico"), []byte("ico"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "site.webmanifest"), []byte("{}"), 0o644)
 
 	s := NewServer(ServerOptions{
 		StaticDir: tmpDir,
@@ -1565,8 +1566,12 @@ func TestCacheControlHeaders(t *testing.T) {
 	}{
 		{"/_app/immutable/chunk.js", "public, max-age=31536000, immutable"},
 		{"/favicon.ico", "public, max-age=2592000"},
+		{"/site.webmanifest", "public, max-age=2592000"},
 		{"/api/healthz", "no-store"},
-		{"/api/news/trending", "public, max-age=60"},
+		{"/api/news/trending", "public, max-age=60, stale-while-revalidate=60"},
+		{"/api/categories", "public, max-age=300, stale-while-revalidate=60"},
+		{"/robots.txt", "public, max-age=86400"},
+		{"/sitemap.xml", "public, max-age=3600"},
 	}
 
 	for _, tt := range tests {
