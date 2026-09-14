@@ -243,8 +243,12 @@ func etagMatches(header, etag string) bool {
 
 // cacheControl sets a sensible Cache-Control header per route:
 //   - /api/health and /api/admin/* are never cached (sensitive / monitoring)
-//   - /api/news/trending is server-cached for minutes, so browsers may reuse
-//     it briefly too
+//   - /api/categories is cached for 5 minutes (rarely changes)
+//   - /api/news/trending is server-cached for minutes, so browsers and CDNs may reuse it
+//   - /robots.txt is cached for 1 day
+//   - /sitemap.xml is cached for 1 hour
+//   - static assets (including /site.webmanifest, favicons, /uploads/) are cached for 30 days
+//   - immutable assets (/_app/immutable/*) are cached for 1 year
 //   - everything else is marked no-cache so clients must revalidate with the
 //     ETag before reusing a cached copy
 func (s *Server) cacheControl(next http.Handler) http.Handler {
@@ -253,8 +257,14 @@ func (s *Server) cacheControl(next http.Handler) http.Handler {
 		switch {
 		case path == "/api/health" || path == "/api/healthz" || path == "/api/metrics" || strings.HasPrefix(path, "/api/admin/"):
 			w.Header().Set("Cache-Control", "no-store")
+		case path == "/api/categories":
+			w.Header().Set("Cache-Control", "public, max-age=300, stale-while-revalidate=60")
 		case path == "/api/news/trending":
-			w.Header().Set("Cache-Control", "public, max-age=60")
+			w.Header().Set("Cache-Control", "public, max-age=60, stale-while-revalidate=60")
+		case path == "/robots.txt":
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+		case path == "/sitemap.xml":
+			w.Header().Set("Cache-Control", "public, max-age=3600")
 		case strings.HasPrefix(path, "/_app/immutable/"):
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		case isStaticPath(path):
@@ -267,13 +277,20 @@ func (s *Server) cacheControl(next http.Handler) http.Handler {
 }
 
 // isStaticPath reports whether the path looks like a static asset that can be
-// cached long-term. The API serves no static files today, but the backend may
-// embed the built frontend in production.
+// cached long-term.
 func isStaticPath(path string) bool {
-	for _, ext := range []string{".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico", ".woff", ".woff2", ".ttf", ".eot"} {
+	for _, ext := range []string{
+		".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico",
+		".woff", ".woff2", ".ttf", ".eot", ".webmanifest", ".xml", ".txt",
+	} {
 		if strings.HasSuffix(path, ext) {
 			return true
 		}
 	}
-	return strings.HasPrefix(path, "/static/") || strings.HasPrefix(path, "/assets/")
+	return strings.HasPrefix(path, "/static/") ||
+		strings.HasPrefix(path, "/assets/") ||
+		strings.HasPrefix(path, "/uploads/") ||
+		path == "/site.webmanifest" ||
+		path == "/favicon.ico" ||
+		path == "/robots.txt"
 }
