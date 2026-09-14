@@ -5,18 +5,20 @@
 	let { initialArticles }: { initialArticles?: TrendingArticle[] } = $props();
 
 	let fetchedArticles = $state<TrendingArticle[] | null>(null);
-	let articles = $derived(fetchedArticles ?? initialArticles ?? []);
-	let isLoading = $state(!initialArticles?.length);
+	let isFetching = $state(false);
 	let errorMessage = $state('');
 	let windowLabel = $state('week');
+
+	const articles = $derived(fetchedArticles ?? initialArticles ?? []);
+	const isLoading = $derived(isFetching && articles.length === 0);
 
 	function formatReads(count: number) {
 		return `${count.toLocaleString('en-US')} ${count === 1 ? 'read' : 'reads'}`;
 	}
 
 	async function fetchTrending() {
-		if (!articles.length) {
-			isLoading = true;
+		if (articles.length === 0) {
+			isFetching = true;
 		}
 		errorMessage = '';
 
@@ -26,7 +28,7 @@
 			});
 
 			if (!res.ok) {
-				if (!articles.length) errorMessage = 'Trending signal unavailable.';
+				if (articles.length === 0) errorMessage = 'Trending signal unavailable.';
 				return;
 			}
 
@@ -35,9 +37,9 @@
 			fetchedArticles = result.data || [];
 		} catch (error) {
 			console.warn('Trending news fetch failed', error);
-			if (!articles.length) errorMessage = 'Trending signal unavailable.';
+			if (articles.length === 0) errorMessage = 'Trending signal unavailable.';
 		} finally {
-			isLoading = false;
+			isFetching = false;
 		}
 	}
 
