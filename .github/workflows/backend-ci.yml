@@ -4,8 +4,6 @@ name: Backend CI
 # vet, and the full test suite must pass before merge.
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
