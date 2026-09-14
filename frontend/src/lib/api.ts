@@ -83,16 +83,17 @@ export async function getCategories(customFetch?: typeof fetch): Promise<Categor
 export async function getNews(
 	customFetch?: typeof fetch,
 	categorySlug?: string,
-	searchQuery?: string
+	searchQuery?: string,
+	pageSize: number = 30
 ): Promise<News[]> {
 	const f = getFetch(customFetch);
 
 	// Build query string. Search uses the backend ?q= endpoint, optionally combined
-	// with a category filter; otherwise fetch a large page to populate the feeds.
+	// with a category filter; otherwise fetch a sensible page to populate the feeds.
 	const isSearch = searchQuery && searchQuery.trim().length > 0;
 	let url = isSearch
 		? `${BASE_URL}/news?q=${encodeURIComponent(searchQuery)}&page_size=20`
-		: `${BASE_URL}/news?page_size=100`;
+		: `${BASE_URL}/news?page_size=${pageSize}`;
 	if (categorySlug) {
 		url += `&category=${encodeURIComponent(categorySlug)}`;
 	}
