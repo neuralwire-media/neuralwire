@@ -1347,6 +1347,13 @@ func TestStaticFallbackRouting(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Errorf("GET / = %d, want 200", rec.Code)
 	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `<link rel="preload" as="fetch" href="/api/news?page_size=30" crossorigin>`) {
+		t.Errorf("GET / missing news API preload, got: %s", body)
+	}
+	if !strings.Contains(body, `<link rel="preload" as="fetch" href="/api/categories" crossorigin>`) {
+		t.Errorf("GET / missing categories API preload, got: %s", body)
+	}
 
 	// 2. Known static route /about -> 200 (index.html)
 	req = httptest.NewRequest(http.MethodGet, "/about", nil)
