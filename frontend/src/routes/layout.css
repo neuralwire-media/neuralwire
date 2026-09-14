@@ -75,20 +75,9 @@ body {
 	background: rgba(34, 211, 238, 0.4);
 }
 
-/* Custom Animations */
-@keyframes pulse-glow {
-	0%,
-	100% {
-		opacity: 0.3;
-	}
-	50% {
-		opacity: 0.7;
-	}
-}
-
+/* Ambient Background Glow (Static for 0% CPU usage) */
 .pulse-glow-bg {
-	animation: pulse-glow 8s infinite ease-in-out;
-	will-change: opacity;
+	opacity: 0.6;
 }
 
 /* Monospace details */

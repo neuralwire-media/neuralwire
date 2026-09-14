@@ -89,7 +89,6 @@
 	></div>
 	<div
 		class="pulse-glow-bg pointer-events-none absolute right-[-10%] bottom-[20%] h-[40vw] w-[40vw] rounded-full bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.05)_0%,transparent_70%)]"
-		style="animation-delay: -4s;"
 	></div>
 
 	<!-- Sticky Header -->
