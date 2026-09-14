@@ -4,8 +4,6 @@ name: Frontend CI
 # type-check, and lint must pass before merge.
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
 
