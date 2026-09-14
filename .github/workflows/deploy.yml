@@ -6,6 +6,13 @@ name: Deploy to VPS
 'on':
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/frontend-ci.yml'
   workflow_dispatch:
 
 permissions:
