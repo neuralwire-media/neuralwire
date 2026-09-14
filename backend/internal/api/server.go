@@ -417,10 +417,16 @@ func (s *Server) serveIndexHTML(w http.ResponseWriter, r *http.Request) {
 				preloadImage = articles[0].ImageURL
 			}
 		} else if !strings.HasPrefix(cleanPath, "category/") && cleanPath != "about" && cleanPath != "copyright" && cleanPath != "search" {
-			// Single article page: preload that article's cover image
+			// Single article page: preload that article's cover image and inject article SEO tags
 			article, err := s.newsRepo.GetBySlug(cleanPath)
-			if err == nil && article != nil && article.ImageURL != "" {
-				preloadImage = article.ImageURL
+			if err == nil && article != nil {
+				if article.ImageURL != "" {
+					preloadImage = article.ImageURL
+				}
+				articleTitle := html.EscapeString(article.Title) + " | Neuralwire"
+				articleDesc := html.EscapeString(article.Summary)
+				content = bytes.Replace(content, []byte("<title>Neuralwire | AI News, Neural Networks &amp; Future Computation</title>"), []byte("<title>"+articleTitle+"</title>"), 1)
+				content = bytes.Replace(content, []byte(`content="Curated intelligence on frontier AI research, neural networks, machine learning, and computational industry."`), []byte(`content="`+articleDesc+`"`), -1)
 			}
 		}
 	}

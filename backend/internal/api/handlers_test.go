@@ -1546,6 +1546,16 @@ func TestStaticFallbackRouting(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `imagesrcset=`) {
 		t.Errorf("GET /%s missing imagesrcset in preload", vergeNews.Slug)
 	}
+
+	// 9. Single article replaces fallback title and meta description
+	seoIndexHTML := `<!doctype html><html><head><title>Neuralwire | AI News, Neural Networks &amp; Future Computation</title><meta name="description" content="Curated intelligence on frontier AI research, neural networks, machine learning, and computational industry." /></head><body>App</body></html>`
+	_ = os.WriteFile(tmpDir+"/index.html", []byte(seoIndexHTML), 0644)
+	req = httptest.NewRequest(http.MethodGet, "/"+vergeNews.Slug, nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), "<title>Verge AI Article | Neuralwire</title>") {
+		t.Errorf("GET /%s missing article title, got: %s", vergeNews.Slug, rec.Body.String())
+	}
 }
 
 func TestCacheControlHeaders(t *testing.T) {

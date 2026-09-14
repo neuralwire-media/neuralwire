@@ -16,3 +16,8 @@ backend/.env
 
 # Local review screenshots
 *.screenshot.png
+
+# Agent skills
+.agents/
+skills-lock.json
+
