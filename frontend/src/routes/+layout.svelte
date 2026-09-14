@@ -1,5 +1,6 @@
 <script lang="ts">
 	import './layout.css';
+	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { getSiteUrl } from '$lib/siteUrl';
@@ -54,6 +55,13 @@
 	function toggleMobileMenu() {
 		isMobileMenuOpen = !isMobileMenuOpen;
 	}
+
+	onMount(() => {
+		const shell = document.getElementById('initial-shell');
+		if (shell) {
+			shell.remove();
+		}
+	});
 </script>
 
 <svelte:head>

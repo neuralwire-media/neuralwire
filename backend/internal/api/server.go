@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -429,7 +430,16 @@ func (s *Server) serveIndexHTML(w http.ResponseWriter, r *http.Request) {
 			imageOrigin := fmt.Sprintf("%s://%s", u.Scheme, u.Host)
 			extraPreloads.WriteString(fmt.Sprintf("\t\t<link rel=\"preconnect\" href=\"%s\">\n", html.EscapeString(imageOrigin)))
 		}
-		extraPreloads.WriteString(fmt.Sprintf("\t\t<link rel=\"preload\" as=\"image\" href=\"%s\" fetchpriority=\"high\">\n", html.EscapeString(preloadImage)))
+		if strings.Contains(preloadImage, "platform.theverge.com") && strings.Contains(preloadImage, "w=") {
+			re := regexp.MustCompile(`([?&]w=)\d+`)
+			u400 := re.ReplaceAllString(preloadImage, "${1}400")
+			u800 := re.ReplaceAllString(preloadImage, "${1}800")
+			u1200 := re.ReplaceAllString(preloadImage, "${1}1200")
+			srcSet := fmt.Sprintf("%s 400w, %s 800w, %s 1200w", html.EscapeString(u400), html.EscapeString(u800), html.EscapeString(u1200))
+			extraPreloads.WriteString(fmt.Sprintf("\t\t<link rel=\"preload\" as=\"image\" href=\"%s\" imagesrcset=\"%s\" imagesizes=\"(max-width: 640px) 400px, (max-width: 1024px) 800px, 1200px\" fetchpriority=\"high\">\n", html.EscapeString(preloadImage), srcSet))
+		} else {
+			extraPreloads.WriteString(fmt.Sprintf("\t\t<link rel=\"preload\" as=\"image\" href=\"%s\" fetchpriority=\"high\">\n", html.EscapeString(preloadImage)))
+		}
 	}
 
 	if extraPreloads.Len() > 0 {

@@ -62,11 +62,30 @@
 	function handleError() {
 		attemptIndex += 1;
 	}
+
+	function getResponsiveSrcSet(url: string): string | undefined {
+		if (url.includes('platform.theverge.com') && (url.includes('w=') || url.includes('width='))) {
+			const u400 = url.replace(/([?&]w(?:idth)?=)\d+/, '$1400');
+			const u800 = url.replace(/([?&]w(?:idth)?=)\d+/, '$1800');
+			const u1200 = url.replace(/([?&]w(?:idth)?=)\d+/, '$11200');
+			return `${u400} 400w, ${u800} 800w, ${u1200} 1200w`;
+		}
+		return undefined;
+	}
+
+	let srcSet = $derived.by(() => {
+		if (activeSrc) {
+			return getResponsiveSrcSet(activeSrc);
+		}
+		return undefined;
+	});
 </script>
 
 {#if activeSrc}
 	<img
 		src={activeSrc}
+		srcset={srcSet}
+		sizes={srcSet ? '(max-width: 640px) 400px, (max-width: 1024px) 800px, 1200px' : undefined}
 		{alt}
 		{loading}
 		decoding="async"

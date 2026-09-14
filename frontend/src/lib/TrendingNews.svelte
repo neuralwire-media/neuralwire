@@ -4,8 +4,9 @@
 
 	let { initialArticles }: { initialArticles?: TrendingArticle[] } = $props();
 
-	let isLoading = $state(!initialArticles || initialArticles.length === 0);
-	let articles = $state<TrendingArticle[]>(initialArticles || []);
+	let fetchedArticles = $state<TrendingArticle[] | null>(null);
+	let articles = $derived(fetchedArticles ?? initialArticles ?? []);
+	let isLoading = $state(!initialArticles?.length);
 	let errorMessage = $state('');
 	let windowLabel = $state('week');
 
@@ -31,7 +32,7 @@
 
 			const result = (await res.json()) as TrendingResponse;
 			windowLabel = result.window || 'week';
-			articles = result.data || [];
+			fetchedArticles = result.data || [];
 		} catch (error) {
 			console.warn('Trending news fetch failed', error);
 			if (!articles.length) errorMessage = 'Trending signal unavailable.';
