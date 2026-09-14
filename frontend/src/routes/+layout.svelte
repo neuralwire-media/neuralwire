@@ -333,7 +333,7 @@
 		</div>
 
 		<div
-			class="mx-auto mt-12 flex max-w-7xl flex-col items-center justify-between border-t border-[rgba(255,255,255,0.05)] px-4 pt-8 font-mono text-xs text-slate-500 sm:flex-row sm:px-6 lg:px-8"
+			class="mx-auto mt-12 flex max-w-7xl flex-col items-center justify-between border-t border-[rgba(255,255,255,0.05)] px-4 pt-8 font-mono text-xs text-slate-400 sm:flex-row sm:px-6 lg:px-8"
 		>
 			<p>© 2026 NEURALWIRE MEDIA. ALL RIGHTS RESERVED.</p>
 		</div>

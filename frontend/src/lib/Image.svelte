@@ -18,16 +18,25 @@
 		loading?: 'lazy' | 'eager';
 	} = $props();
 
+	function isValidImageSource(url: string | null | undefined): boolean {
+		if (!url) return false;
+		// Skip known dead/deprecated endpoints that return HTTP 404
+		if (url.includes('images.unsplash.com/featured/') || url.includes('source.unsplash.com')) {
+			return false;
+		}
+		return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/');
+	}
+
 	// Computed array of image source candidates
 	let candidates = $derived.by(() => {
 		const list: string[] = [];
-		if (src && (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('/'))) {
-			list.push(src);
+		if (isValidImageSource(src)) {
+			list.push(src!);
 		}
 		if (content) {
 			const extracted = extractFirstImage(content);
-			if (extracted && extracted !== src) {
-				list.push(extracted);
+			if (isValidImageSource(extracted) && extracted !== src) {
+				list.push(extracted!);
 			}
 		}
 		return list;
@@ -56,7 +65,15 @@
 </script>
 
 {#if activeSrc}
-	<img src={activeSrc} {alt} {loading} decoding="async" class={className} onerror={handleError} />
+	<img
+		src={activeSrc}
+		{alt}
+		{loading}
+		decoding="async"
+		fetchpriority={loading === 'eager' ? 'high' : 'auto'}
+		class={className}
+		onerror={handleError}
+	/>
 {:else}
 	<!-- Subtle cybernetic placeholder graphic -->
 	<div

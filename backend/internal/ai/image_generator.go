@@ -114,35 +114,9 @@ func extractKeywords(title string) []string {
 	return filtered
 }
 
-// GetDynamicUnsplashURL returns a client-side resolvable Unsplash featured URL with unique signature and title keywords.
+// GetDynamicUnsplashURL returns an empty string because Unsplash shut down the /featured/ endpoint.
 func GetDynamicUnsplashURL(category, title string) string {
-	categoryClean := strings.ToLower(strings.TrimSpace(category))
-	if categoryClean == "" {
-		categoryClean = "technology"
-	}
-
-	keywords := extractKeywords(title)
-	queryTerms := []string{categoryClean}
-
-	// Add up to 2 title keywords for relevance
-	count := 0
-	for _, k := range keywords {
-		if k != categoryClean {
-			queryTerms = append(queryTerms, k)
-			count++
-			if count >= 2 {
-				break
-			}
-		}
-	}
-
-	// Ensure technology context
-	queryTerms = append(queryTerms, "tech")
-
-	queryString := strings.Join(queryTerms, ",")
-	sig := hashString(title)
-
-	return fmt.Sprintf("https://images.unsplash.com/featured/800x450/?%s&sig=%d", queryString, sig)
+	return ""
 }
 
 // hashString computes a simple hash of a string for distribution.
