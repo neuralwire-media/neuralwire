@@ -1,0 +1,34 @@
+name: Deploy to VPS
+
+# Automatically triggers when code is pushed or merged into main.
+# Also allows manual triggering from the GitHub Actions UI (workflow_dispatch).
+
+'on':
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Auto Deploy to VPS
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH and deploy
+        uses: appleboy/ssh-action@v1.2.1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+            echo "==> Deploying Neuralwire on VPS..."
+            cd /app/neuralwire
+            git config --global --add safe.directory /app/neuralwire
+            git pull origin main
+            docker compose up -d --build
+            echo "==> Verifying container status..."
+            docker compose ps
+            echo "==> Deployment completed successfully!"
