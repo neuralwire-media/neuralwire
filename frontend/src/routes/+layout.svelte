@@ -85,10 +85,10 @@
 >
 	<!-- Ambient Background Glows -->
 	<div
-		class="pulse-glow-bg pointer-events-none absolute top-[-20%] left-[-10%] h-[50vw] w-[50vw] rounded-full bg-[#22D3EE]/5 blur-[120px]"
+		class="pulse-glow-bg pointer-events-none absolute top-[-20%] left-[-10%] h-[50vw] w-[50vw] rounded-full bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.08)_0%,transparent_70%)]"
 	></div>
 	<div
-		class="pulse-glow-bg pointer-events-none absolute right-[-10%] bottom-[20%] h-[40vw] w-[40vw] rounded-full bg-[#22D3EE]/3 blur-[100px]"
+		class="pulse-glow-bg pointer-events-none absolute right-[-10%] bottom-[20%] h-[40vw] w-[40vw] rounded-full bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.05)_0%,transparent_70%)]"
 		style="animation-delay: -4s;"
 	></div>
 

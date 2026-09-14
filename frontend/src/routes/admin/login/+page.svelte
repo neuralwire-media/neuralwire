@@ -48,7 +48,7 @@
 <div class="flex flex-grow items-center justify-center px-4 py-20">
 	<!-- Background glow -->
 	<div
-		class="pulse-glow-bg pointer-events-none absolute h-[300px] w-[300px] rounded-full bg-[#22D3EE]/5 blur-[100px]"
+		class="pulse-glow-bg pointer-events-none absolute h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.08)_0%,transparent_70%)]"
 	></div>
 
 	<div
