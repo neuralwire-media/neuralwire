@@ -21,7 +21,7 @@ jobs:
         working-directory: backend
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Check for backend changes
         uses: dorny/paths-filter@v3
@@ -40,7 +40,7 @@ jobs:
 
       - name: Set up Go
         if: steps.filter.outputs.backend == 'true'
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
