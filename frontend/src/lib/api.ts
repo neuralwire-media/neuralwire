@@ -77,6 +77,60 @@ export async function getCategories(customFetch?: typeof fetch): Promise<Categor
 	return mockCategories;
 }
 
+export interface PaginatedNews {
+	articles: News[];
+	total: number;
+	totalPages: number;
+	page: number;
+	pageSize: number;
+}
+
+/**
+ * Fetch paginated news with pagination metadata, optional filtering by category or query.
+ */
+export async function getNewsPage(
+	customFetch?: typeof fetch,
+	categorySlug?: string,
+	searchQuery?: string,
+	page: number = 1,
+	pageSize: number = 15
+): Promise<PaginatedNews> {
+	const f = getFetch(customFetch);
+
+	const isSearch = searchQuery && searchQuery.trim().length > 0;
+	const params = new URLSearchParams();
+	if (isSearch) {
+		params.set('q', searchQuery.trim());
+	}
+	if (categorySlug && categorySlug !== 'all') {
+		params.set('category', categorySlug);
+	}
+	params.set('page', String(page));
+	params.set('page_size', String(pageSize));
+
+	const url = `${BASE_URL}/news?${params.toString()}`;
+	const result = await fetchJsonCached<{
+		data: News[];
+		pagination?: { page: number; page_size: number; total: number; total_pages: number };
+	}>(url, f, AbortSignal.timeout(3000));
+
+	const articles = (result?.data ?? [])
+		.filter((item) => item.status === 'published')
+		.sort((a, b) => {
+			const dateA = new Date(a.published_at || a.created_at).getTime();
+			const dateB = new Date(b.published_at || b.created_at).getTime();
+			return dateB - dateA;
+		});
+
+	return {
+		articles,
+		total: result?.pagination?.total ?? articles.length,
+		totalPages: result?.pagination?.total_pages ?? (articles.length > 0 ? 1 : 0),
+		page: result?.pagination?.page ?? page,
+		pageSize: result?.pagination?.page_size ?? pageSize
+	};
+}
+
 /**
  * Fetch all news, optional filtering by category or query.
  */
@@ -84,31 +138,11 @@ export async function getNews(
 	customFetch?: typeof fetch,
 	categorySlug?: string,
 	searchQuery?: string,
-	pageSize: number = 15
+	pageSize: number = 15,
+	page: number = 1
 ): Promise<News[]> {
-	const f = getFetch(customFetch);
-
-	// Build query string. Search uses the backend ?q= endpoint, optionally combined
-	// with a category filter; otherwise fetch a sensible page to populate the feeds.
-	const isSearch = searchQuery && searchQuery.trim().length > 0;
-	let url = isSearch
-		? `${BASE_URL}/news?q=${encodeURIComponent(searchQuery)}&page_size=20`
-		: `${BASE_URL}/news?page_size=${pageSize}`;
-	if (categorySlug) {
-		url += `&category=${encodeURIComponent(categorySlug)}`;
-	}
-
-	const result = await fetchJsonCached<{ data: News[] }>(url, f, AbortSignal.timeout(2000));
-	const articles = result?.data ?? [];
-
-	// Filter by published status (backend search already filters by category/query).
-	return articles
-		.filter((item) => item.status === 'published')
-		.sort((a, b) => {
-			const dateA = new Date(a.published_at || a.created_at).getTime();
-			const dateB = new Date(b.published_at || b.created_at).getTime();
-			return dateB - dateA;
-		});
+	const res = await getNewsPage(customFetch, categorySlug, searchQuery, page, pageSize);
+	return res.articles;
 }
 
 /**

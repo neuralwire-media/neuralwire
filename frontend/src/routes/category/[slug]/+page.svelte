@@ -3,20 +3,31 @@
 	import type { News } from '$lib/mockData';
 	import Image from '$lib/Image.svelte';
 	import { getSiteUrl } from '$lib/siteUrl';
+	import { getNewsPage } from '$lib/api';
 
 	let { data }: { data: PageData } = $props();
 
 	const category = $derived(data.category);
-	const articles = $derived(data.news as News[]);
-	let visibleCount = $state(15);
+	const initialArticles = $derived(data.news as News[]);
+	const totalItems = $derived(data.total ?? (data.news as News[]).length);
+	const initialTotalPages = $derived(data.totalPages ?? 1);
+
+	let loadedArticles = $state<News[] | null>(null);
+	let currentPage = $state(1);
+	let totalPages = $state(1);
+	let isLoadingMore = $state(false);
 
 	$effect(() => {
 		if (category.slug) {
-			visibleCount = 15;
+			loadedArticles = null;
+			currentPage = 1;
+			totalPages = initialTotalPages;
 		}
 	});
 
-	const visibleFeed = $derived(articles.slice(0, visibleCount));
+	const articles = $derived(loadedArticles ?? initialArticles);
+	const hasMore = $derived(currentPage < (loadedArticles ? totalPages : initialTotalPages));
+	const canCollapse = $derived(articles.length > 15 || currentPage > 1);
 
 	function formatDate(dateStr: string) {
 		const d = new Date(dateStr);
@@ -33,8 +44,31 @@
 		return `${minutes} min read`;
 	}
 
+	async function loadMore() {
+		const maxPages = loadedArticles ? totalPages : initialTotalPages;
+		if (isLoadingMore || currentPage >= maxPages) return;
+
+		isLoadingMore = true;
+		try {
+			const nextPage = currentPage + 1;
+			const res = await getNewsPage(fetch, category.slug, undefined, nextPage, 15);
+			const currentList = loadedArticles ?? initialArticles;
+			const existingIds = new Set(currentList.map((a) => a.id));
+			const newArticles = res.articles.filter((a) => !existingIds.has(a.id));
+
+			loadedArticles = [...currentList, ...newArticles];
+			currentPage = nextPage;
+			totalPages = res.totalPages;
+		} catch (err) {
+			console.error(`Failed to load more news for category '${category.slug}':`, err);
+		} finally {
+			isLoadingMore = false;
+		}
+	}
+
 	function collapseFeed() {
-		visibleCount = 15;
+		loadedArticles = null;
+		currentPage = 1;
 		const element = document.getElementById('category-feed');
 		if (element) {
 			element.scrollIntoView({ behavior: 'smooth' });
@@ -79,9 +113,9 @@
 	</div>
 
 	<!-- Articles Grid -->
-	{#if visibleFeed.length > 0}
+	{#if articles.length > 0}
 		<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8 2xl:grid-cols-5">
-			{#each visibleFeed as post}
+			{#each articles as post (post.id)}
 				<article
 					class="group glow-hover flex flex-col overflow-hidden rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#0F172A]/25"
 				>
@@ -146,16 +180,46 @@
 			{/each}
 		</div>
 
-		{#if articles.length > visibleCount}
-			<div class="mt-12 flex justify-center gap-4">
+		{#if hasMore}
+			<div class="mt-12 flex flex-wrap items-center justify-center gap-4">
 				<button
-					onclick={() => (visibleCount += 15)}
-					class="cursor-pointer rounded-xl border border-[#22D3EE]/30 bg-[#22D3EE]/5 px-8 py-3 font-mono text-xs font-bold tracking-widest text-[#22D3EE] uppercase transition-all hover:border-[#22D3EE] hover:bg-[#22D3EE]/10 hover:text-white"
+					type="button"
+					onclick={loadMore}
+					disabled={isLoadingMore}
+					class="inline-flex cursor-pointer items-center space-x-2 rounded-xl border border-[#22D3EE]/30 bg-[#22D3EE]/5 px-8 py-3 font-mono text-xs font-bold tracking-widest text-[#22D3EE] uppercase transition-all hover:border-[#22D3EE] hover:bg-[#22D3EE]/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
 				>
-					Load More
+					{#if isLoadingMore}
+						<svg class="h-4 w-4 animate-spin text-[#22D3EE]" fill="none" viewBox="0 0 24 24">
+							<circle
+								class="opacity-25"
+								cx="12"
+								cy="12"
+								r="10"
+								stroke="currentColor"
+								stroke-width="4"
+							></circle>
+							<path
+								class="opacity-75"
+								fill="currentColor"
+								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+							></path>
+						</svg>
+						<span>RECEIVING TRANSMISSIONS...</span>
+					{:else}
+						<span>LOAD MORE TRANSMISSIONS</span>
+						<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M19 9l-7 7-7-7"
+							/>
+						</svg>
+					{/if}
 				</button>
-				{#if visibleCount > 15}
+				{#if canCollapse}
 					<button
+						type="button"
 						onclick={collapseFeed}
 						class="cursor-pointer rounded-xl border border-[#E11D48]/30 bg-[#E11D48]/5 px-8 py-3 font-mono text-xs font-bold tracking-widest text-[#E11D48] uppercase transition-all hover:border-[#E11D48] hover:bg-[#E11D48]/10 hover:text-white"
 					>
@@ -163,19 +227,29 @@
 					</button>
 				{/if}
 			</div>
-		{:else if visibleCount > 15}
-			<div class="mt-12 flex justify-center">
-				<button
-					onclick={collapseFeed}
-					class="cursor-pointer rounded-xl border border-[#E11D48]/30 bg-[#E11D48]/5 px-8 py-3 font-mono text-xs font-bold tracking-widest text-[#E11D48] uppercase transition-all hover:border-[#E11D48] hover:bg-[#E11D48]/10 hover:text-white"
+		{:else}
+			<div class="mt-12 flex flex-col items-center justify-center gap-4">
+				<div
+					class="inline-flex items-center space-x-2 rounded-full border border-[rgba(255,255,255,0.08)] bg-[#0F172A]/40 px-4 py-1.5 font-mono text-[11px] text-slate-400"
 				>
-					Hide Feed
-				</button>
+					<span class="h-1.5 w-1.5 animate-pulse rounded-full bg-[#22D3EE]"></span>
+					<span>ALL {totalItems} TRANSMISSIONS INDEXED</span>
+				</div>
+				{#if canCollapse}
+					<button
+						type="button"
+						onclick={collapseFeed}
+						class="cursor-pointer rounded-xl border border-[#E11D48]/30 bg-[#E11D48]/5 px-8 py-3 font-mono text-xs font-bold tracking-widest text-[#E11D48] uppercase transition-all hover:border-[#E11D48] hover:bg-[#E11D48]/10 hover:text-white"
+					>
+						Hide Feed
+					</button>
+				{/if}
 			</div>
 		{/if}
 
-		{#if visibleCount > 15}
+		{#if canCollapse}
 			<button
+				type="button"
 				onclick={collapseFeed}
 				class="fixed right-6 bottom-6 z-40 flex h-10 cursor-pointer items-center justify-center space-x-2 rounded-full border border-[#E11D48]/40 bg-[#0A0E17]/90 px-4 py-2 font-mono text-[10px] font-bold tracking-widest text-[#E11D48] shadow-[0_0_15px_rgba(225,29,72,0.15)] backdrop-blur-sm transition-all hover:border-[#E11D48] hover:bg-[#E11D48]/10 hover:text-white active:scale-95"
 				title="Collapse Feed"

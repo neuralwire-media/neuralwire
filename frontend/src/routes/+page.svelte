@@ -5,34 +5,58 @@
 	import Image from '$lib/Image.svelte';
 	import TrendingNews from '$lib/TrendingNews.svelte';
 	import { getSiteUrl } from '$lib/siteUrl';
+	import { getNewsPage } from '$lib/api';
 
 	let { data }: { data: PageData } = $props();
+
+	interface FeedState {
+		articles: News[];
+		page: number;
+		totalPages: number;
+		total: number;
+	}
 
 	// Active category filter (for the grid, leaving the hero as the absolute latest)
 	let activeCategory = $state('all');
 	let heroIndex = $state(0);
 	let isHeroPaused = $state(false);
-	let visibleCount = $state(15);
-
-	$effect(() => {
-		if (activeCategory) {
-			visibleCount = 15;
-		}
-	});
+	let isLoadingMore = $state(false);
+	let isCategoryLoading = $state(false);
 
 	// Compute filtered news for the feed grid
 	const articles = $derived(data.news as News[]);
 	const heroArticles = $derived(articles.slice(0, 5));
 	const featuredArticle = $derived(heroArticles[heroIndex] ?? articles[0]);
-	const feedArticles = $derived(articles.slice(1));
 
-	const filteredFeed = $derived(
-		activeCategory === 'all'
-			? feedArticles
-			: feedArticles.filter((item) => item.category === activeCategory)
+	// Feed state management with SSR-safe initial feed
+	const initialFeed = $derived<FeedState>({
+		articles: (data.news as News[]).slice(1),
+		page: 1,
+		totalPages: data.totalPages ?? 1,
+		total: data.total ?? (data.news as News[]).length
+	});
+
+	let loadedFeeds = $state<Record<string, FeedState>>({});
+
+	const currentFeed = $derived(
+		loadedFeeds[activeCategory] ??
+			(activeCategory === 'all'
+				? initialFeed
+				: {
+						articles: [],
+						page: 1,
+						totalPages: 1,
+						total: 0
+					})
 	);
 
-	const visibleFeed = $derived(filteredFeed.slice(0, visibleCount));
+	const visibleFeed = $derived(currentFeed.articles);
+	const hasMore = $derived(currentFeed.page < currentFeed.totalPages);
+	const canCollapse = $derived(
+		activeCategory === 'all'
+			? currentFeed.articles.length > 14 || currentFeed.page > 1
+			: currentFeed.articles.length > 15 || currentFeed.page > 1
+	);
 
 	const categories = $derived([
 		{ name: 'All News', slug: 'all' },
@@ -73,8 +97,67 @@
 		selectHero(heroIndex - 1);
 	}
 
+	async function selectCategory(slug: string) {
+		if (activeCategory === slug) return;
+		activeCategory = slug;
+
+		if (slug !== 'all' && !loadedFeeds[slug]) {
+			isCategoryLoading = true;
+			try {
+				const res = await getNewsPage(fetch, slug, undefined, 1, 15);
+				loadedFeeds[slug] = {
+					articles: res.articles,
+					page: 1,
+					totalPages: res.totalPages,
+					total: res.total
+				};
+			} catch (err) {
+				console.error(`Failed to load category feed '${slug}':`, err);
+			} finally {
+				isCategoryLoading = false;
+			}
+		}
+	}
+
+	async function loadMore() {
+		const feed = currentFeed;
+		if (isLoadingMore || feed.page >= feed.totalPages) return;
+
+		isLoadingMore = true;
+		try {
+			const nextPage = feed.page + 1;
+			const catParam = activeCategory === 'all' ? undefined : activeCategory;
+			const res = await getNewsPage(fetch, catParam, undefined, nextPage, 15);
+
+			const existingIds = new Set([
+				...(activeCategory === 'all' ? heroArticles.map((a) => a.id) : []),
+				...feed.articles.map((a) => a.id)
+			]);
+			const newArticles = res.articles.filter((a) => !existingIds.has(a.id));
+
+			loadedFeeds[activeCategory] = {
+				articles: [...feed.articles, ...newArticles],
+				page: nextPage,
+				totalPages: res.totalPages,
+				total: res.total
+			};
+		} catch (err) {
+			console.error(`Failed to load more news for category '${activeCategory}':`, err);
+		} finally {
+			isLoadingMore = false;
+		}
+	}
+
 	function collapseFeed() {
-		visibleCount = 15;
+		if (activeCategory === 'all') {
+			delete loadedFeeds.all;
+		} else if (loadedFeeds[activeCategory]) {
+			loadedFeeds[activeCategory] = {
+				...loadedFeeds[activeCategory],
+				articles: loadedFeeds[activeCategory].articles.slice(0, 15),
+				page: 1
+			};
+		}
 		const element = document.getElementById('chronicle-feed');
 		if (element) {
 			element.scrollIntoView({ behavior: 'smooth' });
@@ -323,7 +406,8 @@
 		<div class="flex flex-wrap gap-2">
 			{#each categories as cat}
 				<button
-					onclick={() => (activeCategory = cat.slug)}
+					type="button"
+					onclick={() => selectCategory(cat.slug)}
 					class="rounded-lg border px-3 py-1.5 font-mono text-xs tracking-wider uppercase transition-all
 						{activeCategory === cat.slug
 						? 'accent-glow-glow border-[#22D3EE]/40 bg-[#22D3EE]/10 text-[#22D3EE]'
@@ -336,9 +420,24 @@
 	</div>
 
 	<!-- News Grid -->
-	{#if visibleFeed.length > 0}
+	{#if isCategoryLoading}
 		<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8 2xl:grid-cols-5">
-			{#each visibleFeed as post}
+			{#each [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as i (i)}
+				<div
+					data-index={i}
+					class="flex animate-pulse flex-col overflow-hidden rounded-xl border border-[rgba(255,255,255,0.06)] bg-[#0F172A]/25 p-4"
+				>
+					<div class="mb-4 aspect-[16/10] w-full rounded-lg bg-slate-800/40"></div>
+					<div class="mb-3 h-3 w-20 rounded bg-slate-800/60"></div>
+					<div class="mb-2 h-5 w-5/6 rounded bg-slate-800/70"></div>
+					<div class="mb-2 h-4 w-full rounded bg-slate-800/40"></div>
+					<div class="h-4 w-2/3 rounded bg-slate-800/40"></div>
+				</div>
+			{/each}
+		</div>
+	{:else if visibleFeed.length > 0}
+		<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8 2xl:grid-cols-5">
+			{#each visibleFeed as post (post.id)}
 				<article
 					class="group glow-hover flex flex-col overflow-hidden rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#0F172A]/25"
 				>
@@ -410,16 +509,46 @@
 			{/each}
 		</div>
 
-		{#if filteredFeed.length > visibleCount}
-			<div class="mt-12 flex justify-center gap-4">
+		{#if hasMore}
+			<div class="mt-12 flex flex-wrap items-center justify-center gap-4">
 				<button
-					onclick={() => (visibleCount += 15)}
-					class="cursor-pointer rounded-xl border border-[#22D3EE]/30 bg-[#22D3EE]/5 px-8 py-3 font-mono text-xs font-bold tracking-widest text-[#22D3EE] uppercase transition-all hover:border-[#22D3EE] hover:bg-[#22D3EE]/10 hover:text-white"
+					type="button"
+					onclick={loadMore}
+					disabled={isLoadingMore}
+					class="inline-flex cursor-pointer items-center space-x-2 rounded-xl border border-[#22D3EE]/30 bg-[#22D3EE]/5 px-8 py-3 font-mono text-xs font-bold tracking-widest text-[#22D3EE] uppercase transition-all hover:border-[#22D3EE] hover:bg-[#22D3EE]/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
 				>
-					Load More
+					{#if isLoadingMore}
+						<svg class="h-4 w-4 animate-spin text-[#22D3EE]" fill="none" viewBox="0 0 24 24">
+							<circle
+								class="opacity-25"
+								cx="12"
+								cy="12"
+								r="10"
+								stroke="currentColor"
+								stroke-width="4"
+							></circle>
+							<path
+								class="opacity-75"
+								fill="currentColor"
+								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+							></path>
+						</svg>
+						<span>RECEIVING TRANSMISSIONS...</span>
+					{:else}
+						<span>LOAD MORE TRANSMISSIONS</span>
+						<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M19 9l-7 7-7-7"
+							/>
+						</svg>
+					{/if}
 				</button>
-				{#if visibleCount > 15}
+				{#if canCollapse}
 					<button
+						type="button"
 						onclick={collapseFeed}
 						class="cursor-pointer rounded-xl border border-[#E11D48]/30 bg-[#E11D48]/5 px-8 py-3 font-mono text-xs font-bold tracking-widest text-[#E11D48] uppercase transition-all hover:border-[#E11D48] hover:bg-[#E11D48]/10 hover:text-white"
 					>
@@ -427,19 +556,29 @@
 					</button>
 				{/if}
 			</div>
-		{:else if visibleCount > 15}
-			<div class="mt-12 flex justify-center">
-				<button
-					onclick={collapseFeed}
-					class="cursor-pointer rounded-xl border border-[#E11D48]/30 bg-[#E11D48]/5 px-8 py-3 font-mono text-xs font-bold tracking-widest text-[#E11D48] uppercase transition-all hover:border-[#E11D48] hover:bg-[#E11D48]/10 hover:text-white"
+		{:else}
+			<div class="mt-12 flex flex-col items-center justify-center gap-4">
+				<div
+					class="inline-flex items-center space-x-2 rounded-full border border-[rgba(255,255,255,0.08)] bg-[#0F172A]/40 px-4 py-1.5 font-mono text-[11px] text-slate-400"
 				>
-					Hide Feed
-				</button>
+					<span class="h-1.5 w-1.5 animate-pulse rounded-full bg-[#22D3EE]"></span>
+					<span>ALL {currentFeed.total || visibleFeed.length} TRANSMISSIONS INDEXED</span>
+				</div>
+				{#if canCollapse}
+					<button
+						type="button"
+						onclick={collapseFeed}
+						class="cursor-pointer rounded-xl border border-[#E11D48]/30 bg-[#E11D48]/5 px-8 py-3 font-mono text-xs font-bold tracking-widest text-[#E11D48] uppercase transition-all hover:border-[#E11D48] hover:bg-[#E11D48]/10 hover:text-white"
+					>
+						Hide Feed
+					</button>
+				{/if}
 			</div>
 		{/if}
 
-		{#if visibleCount > 15}
+		{#if canCollapse}
 			<button
+				type="button"
 				onclick={collapseFeed}
 				class="fixed right-6 bottom-6 z-40 flex h-10 cursor-pointer items-center justify-center space-x-2 rounded-full border border-[#E11D48]/40 bg-[#0A0E17]/90 px-4 py-2 font-mono text-[10px] font-bold tracking-widest text-[#E11D48] shadow-[0_0_15px_rgba(225,29,72,0.15)] backdrop-blur-sm transition-all hover:border-[#E11D48] hover:bg-[#E11D48]/10 hover:text-white active:scale-95"
 				title="Collapse Feed"
