@@ -22,8 +22,8 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          script_stop: true
           script: |
+            set -e
             echo "==> Deploying Neuralwire on VPS..."
             cd /app/neuralwire
             git config --global --add safe.directory /app/neuralwire
