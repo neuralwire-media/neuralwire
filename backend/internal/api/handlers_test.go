@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -1406,5 +1407,38 @@ func TestStaticFallbackRouting(t *testing.T) {
 	}
 	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
 		t.Errorf("unknown API Content-Type = %q, want application/json", ct)
+	}
+}
+
+func TestCacheControlHeaders(t *testing.T) {
+	tmpDir := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(tmpDir, "_app", "immutable"), 0o755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "_app", "immutable", "chunk.js"), []byte("console.log(1)"), 0o644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "favicon.ico"), []byte("ico"), 0o644)
+
+	s := NewServer(ServerOptions{
+		StaticDir: tmpDir,
+	})
+	h := s.Handler()
+
+	tests := []struct {
+		path      string
+		wantCache string
+	}{
+		{"/_app/immutable/chunk.js", "public, max-age=31536000, immutable"},
+		{"/favicon.ico", "public, max-age=86400"},
+		{"/api/healthz", "no-store"},
+		{"/api/news/trending", "public, max-age=60"},
+	}
+
+	for _, tt := range tests {
+		req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+
+		got := rec.Header().Get("Cache-Control")
+		if got != tt.wantCache {
+			t.Errorf("Cache-Control for %s = %q, want %q", tt.path, got, tt.wantCache)
+		}
 	}
 }
