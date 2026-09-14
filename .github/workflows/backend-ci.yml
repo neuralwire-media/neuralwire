@@ -1,7 +1,8 @@
 name: Backend CI
 
 # Runs on every push/PR touching backend code (or this workflow). Build,
-# vet, and the full test suite must pass before merge.
+# vet, and the full test suite must pass before merge. Uses fast-path skip
+# when changes are frontend-only to satisfy required branch protection checks quickly.
 
 on:
   pull_request:
@@ -9,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   backend:
@@ -21,19 +23,38 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Check for backend changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/backend-ci.yml'
+              - 'docker-compose.yml'
+              - 'Dockerfile'
+
+      - name: Skip notice
+        if: steps.filter.outputs.backend != 'true'
+        run: echo "No backend changes detected. Fast-path skip active."
+
       - name: Set up Go
+        if: steps.filter.outputs.backend == 'true'
         uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
 
       - name: Vet
+        if: steps.filter.outputs.backend == 'true'
         run: go vet ./...
 
       - name: Build
+        if: steps.filter.outputs.backend == 'true'
         run: go build ./...
 
       - name: Format check
+        if: steps.filter.outputs.backend == 'true'
         run: |
           unformatted="$(gofmt -l .)"
           if [ -n "$unformatted" ]; then
@@ -43,12 +64,15 @@ jobs:
           fi
 
       - name: Test
+        if: steps.filter.outputs.backend == 'true'
         run: go test ./... -race -count=1
 
       - name: Build server binary artifact
+        if: steps.filter.outputs.backend == 'true'
         run: go build -o neuralwire-server ./cmd/server
 
       - name: Upload server binary
+        if: steps.filter.outputs.backend == 'true'
         uses: actions/upload-artifact@v5
         with:
           name: neuralwire-server

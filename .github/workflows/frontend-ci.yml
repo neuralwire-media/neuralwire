@@ -1,7 +1,8 @@
 name: Frontend CI
 
 # Runs on every push/PR touching frontend code (or this workflow). Build,
-# type-check, and lint must pass before merge.
+# type-check, and lint must pass before merge. Uses fast-path skip
+# when changes are backend-only to satisfy required branch protection checks quickly.
 
 on:
   pull_request:
@@ -9,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   frontend:
@@ -21,7 +23,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Check for frontend changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/frontend-ci.yml'
+
+      - name: Skip notice
+        if: steps.filter.outputs.frontend != 'true'
+        run: echo "No frontend changes detected. Fast-path skip active."
+
       - name: Set up Node
+        if: steps.filter.outputs.frontend == 'true'
         uses: actions/setup-node@v5
         with:
           node-version: 24
@@ -29,13 +45,17 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
+        if: steps.filter.outputs.frontend == 'true'
         run: npm ci
 
       - name: Type-check (svelte-check)
+        if: steps.filter.outputs.frontend == 'true'
         run: npm run check
 
       - name: Lint (prettier + eslint)
+        if: steps.filter.outputs.frontend == 'true'
         run: npm run lint
 
       - name: Build
+        if: steps.filter.outputs.frontend == 'true'
         run: npm run build
