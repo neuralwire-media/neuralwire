@@ -79,18 +79,16 @@ body {
 @keyframes pulse-glow {
 	0%,
 	100% {
-		opacity: 0.2;
-		transform: scale(0.98);
+		opacity: 0.3;
 	}
 	50% {
-		opacity: 0.45;
-		transform: scale(1.02);
+		opacity: 0.7;
 	}
 }
 
 .pulse-glow-bg {
 	animation: pulse-glow 8s infinite ease-in-out;
-	will-change: opacity, transform;
+	will-change: opacity;
 }
 
 /* Monospace details */
