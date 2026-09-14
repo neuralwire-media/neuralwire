@@ -2,8 +2,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"html"
 	"io"
 	"log"
 	"log/slog"
@@ -257,15 +260,16 @@ func (s *Server) Handler() http.Handler {
 			fileServer := http.FileServer(http.Dir(s.staticDir))
 			mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 				path := r.URL.Path
-				if path == "/" {
-					path = "/index.html"
+				if path == "/" || path == "/index.html" {
+					s.serveIndexHTML(w, r)
+					return
 				}
 				// If the asset exists on disk, serve it directly.
 				candidate := http.Dir(s.staticDir)
 				if _, err := candidate.Open(strings.TrimPrefix(path, "/")); err != nil {
 					cleanPath := strings.Trim(r.URL.Path, "/")
 					if s.isValidFrontendRoute(cleanPath) {
-						http.ServeFile(w, r, filepath.Join(s.staticDir, "index.html"))
+						s.serveIndexHTML(w, r)
 						return
 					}
 					s.serveNotFound(w, r)
@@ -382,4 +386,42 @@ func (s *Server) serveNotFound(w http.ResponseWriter, r *http.Request) {
   </div>
 </body>
 </html>`))
+}
+
+// serveIndexHTML serves the SPA entrypoint index.html, dynamically injecting
+// an LCP cover image preload link in <head> for the homepage and single article pages.
+func (s *Server) serveIndexHTML(w http.ResponseWriter, r *http.Request) {
+	indexPath := filepath.Join(s.staticDir, "index.html")
+	content, err := os.ReadFile(indexPath)
+	if err != nil {
+		http.ServeFile(w, r, indexPath)
+		return
+	}
+
+	var preloadImage string
+	if s.newsRepo != nil {
+		cleanPath := strings.Trim(r.URL.Path, "/")
+		if cleanPath == "" || cleanPath == "index.html" {
+			// Homepage: preload latest published article cover image
+			articles, _, err := s.newsRepo.ListPublished("", "", 1, 1)
+			if err == nil && len(articles) > 0 && articles[0].ImageURL != "" {
+				preloadImage = articles[0].ImageURL
+			}
+		} else if !strings.HasPrefix(cleanPath, "category/") && cleanPath != "about" && cleanPath != "copyright" && cleanPath != "search" {
+			// Single article page: preload that article's cover image
+			article, err := s.newsRepo.GetBySlug(cleanPath)
+			if err == nil && article != nil && article.ImageURL != "" {
+				preloadImage = article.ImageURL
+			}
+		}
+	}
+
+	if preloadImage != "" {
+		preloadTag := fmt.Sprintf("\t\t<link rel=\"preload\" as=\"image\" href=\"%s\" fetchpriority=\"high\">\n\t", html.EscapeString(preloadImage))
+		content = bytes.Replace(content, []byte("</head>"), []byte(preloadTag+"</head>"), 1)
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(content)
 }
