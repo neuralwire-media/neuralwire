@@ -255,8 +255,10 @@ func (s *Server) cacheControl(next http.Handler) http.Handler {
 			w.Header().Set("Cache-Control", "no-store")
 		case path == "/api/news/trending":
 			w.Header().Set("Cache-Control", "public, max-age=60")
+		case strings.HasPrefix(path, "/_app/immutable/"):
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		case isStaticPath(path):
-			w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
+			w.Header().Set("Cache-Control", "public, max-age=86400")
 		default:
 			w.Header().Set("Cache-Control", "no-cache")
 		}
