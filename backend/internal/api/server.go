@@ -11,6 +11,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -389,7 +390,7 @@ func (s *Server) serveNotFound(w http.ResponseWriter, r *http.Request) {
 }
 
 // serveIndexHTML serves the SPA entrypoint index.html, dynamically injecting
-// an LCP cover image preload link in <head> for the homepage and single article pages.
+// API fetch preloads, image preconnects, and an LCP cover image preload link in <head>.
 func (s *Server) serveIndexHTML(w http.ResponseWriter, r *http.Request) {
 	indexPath := filepath.Join(s.staticDir, "index.html")
 	content, err := os.ReadFile(indexPath)
@@ -398,9 +399,15 @@ func (s *Server) serveIndexHTML(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cleanPath := strings.Trim(r.URL.Path, "/")
+	var extraPreloads strings.Builder
+	extraPreloads.WriteString("\t\t<link rel=\"preload\" as=\"fetch\" href=\"/api/categories\" crossorigin>\n")
+	if cleanPath == "" || cleanPath == "index.html" {
+		extraPreloads.WriteString("\t\t<link rel=\"preload\" as=\"fetch\" href=\"/api/news?page_size=30\" crossorigin>\n")
+	}
+
 	var preloadImage string
 	if s.newsRepo != nil {
-		cleanPath := strings.Trim(r.URL.Path, "/")
 		if cleanPath == "" || cleanPath == "index.html" {
 			// Homepage: preload latest published article cover image
 			articles, _, err := s.newsRepo.ListPublished("", "", 1, 1)
@@ -417,8 +424,15 @@ func (s *Server) serveIndexHTML(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if preloadImage != "" {
-		preloadTag := fmt.Sprintf("\t\t<link rel=\"preload\" as=\"image\" href=\"%s\" fetchpriority=\"high\">\n\t", html.EscapeString(preloadImage))
-		content = bytes.Replace(content, []byte("</head>"), []byte(preloadTag+"</head>"), 1)
+		if u, err := url.Parse(preloadImage); err == nil && u.Scheme != "" && u.Host != "" {
+			imageOrigin := fmt.Sprintf("%s://%s", u.Scheme, u.Host)
+			extraPreloads.WriteString(fmt.Sprintf("\t\t<link rel=\"preconnect\" href=\"%s\">\n", html.EscapeString(imageOrigin)))
+		}
+		extraPreloads.WriteString(fmt.Sprintf("\t\t<link rel=\"preload\" as=\"image\" href=\"%s\" fetchpriority=\"high\">\n", html.EscapeString(preloadImage)))
+	}
+
+	if extraPreloads.Len() > 0 {
+		content = bytes.Replace(content, []byte("</head>"), []byte(extraPreloads.String()+"\t</head>"), 1)
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
