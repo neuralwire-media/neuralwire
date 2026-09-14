@@ -80,16 +80,17 @@ body {
 	0%,
 	100% {
 		opacity: 0.2;
-		filter: blur(8px);
+		transform: scale(0.98);
 	}
 	50% {
-		opacity: 0.4;
-		filter: blur(12px);
+		opacity: 0.45;
+		transform: scale(1.02);
 	}
 }
 
 .pulse-glow-bg {
 	animation: pulse-glow 8s infinite ease-in-out;
+	will-change: opacity, transform;
 }
 
 /* Monospace details */
