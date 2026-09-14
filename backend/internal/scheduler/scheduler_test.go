@@ -3,7 +3,9 @@ package scheduler
 import (
 	"testing"
 
+	"neuralwire/backend/internal/database"
 	"neuralwire/backend/internal/models"
+	"neuralwire/backend/internal/repository"
 )
 
 func TestLabelAtLeast(t *testing.T) {
@@ -86,5 +88,85 @@ func TestFilterMatchMultiLabel(t *testing.T) {
 	news.ValueLabel = "LOW"
 	if !filterMatch(news, cfg2) {
 		t.Error("expected multi-label [low] to allow LOW")
+	}
+}
+
+func TestActivePersistence(t *testing.T) {
+	db, err := database.Open(":memory:")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+
+	if err := database.Migrate(db); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if err := database.Seed(db); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	repo := repository.NewSettingsRepository(db)
+
+	// 1. Initially default: active should be false
+	sched1 := New(repo, Job{}, nil)
+	if sched1.Active() {
+		t.Errorf("expected initial Active() to be false, got true")
+	}
+
+	// 2. SetActive(true) should persist
+	sched1.SetActive(true)
+	if !sched1.Active() {
+		t.Errorf("expected Active() to be true after SetActive(true)")
+	}
+	if !repo.GetAutoPublishActive() {
+		t.Errorf("expected repo.GetAutoPublishActive() to be true")
+	}
+
+	// 3. Simulating server restart/rebuild with same database
+	sched2 := New(repo, Job{}, nil)
+	if !sched2.Active() {
+		t.Errorf("expected sched2.Active() to be true after restart")
+	}
+
+	// 4. SetActive(false) should persist
+	sched2.SetActive(false)
+	if sched2.Active() {
+		t.Errorf("expected Active() to be false after SetActive(false)")
+	}
+	if repo.GetAutoPublishActive() {
+		t.Errorf("expected repo.GetAutoPublishActive() to be false")
+	}
+
+	// 5. Simulating restart after stop
+	sched3 := New(repo, Job{}, nil)
+	if sched3.Active() {
+		t.Errorf("expected sched3.Active() to be false after stop and restart")
+	}
+}
+
+func TestActiveFallbackToConfigEnabled(t *testing.T) {
+	db, err := database.Open(":memory:")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+
+	if err := database.Migrate(db); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if err := database.Seed(db); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	repo := repository.NewSettingsRepository(db)
+
+	// User saved config with Enabled=true before active key was recorded
+	if err := repo.SetAutoPublishConfig(models.AutoPublishConfig{Enabled: true}); err != nil {
+		t.Fatalf("set config: %v", err)
+	}
+
+	sched := New(repo, Job{}, nil)
+	if !sched.Active() {
+		t.Errorf("expected Active() to be true via fallback to config.Enabled")
 	}
 }

@@ -101,12 +101,18 @@ func (r *SettingsRepository) SetScoreThresholds(t models.ScoreThresholds) error 
 	return nil
 }
 
-const autoPublishKey = "auto_publish_config"
+const (
+	autoPublishKey       = "auto_publish_config"
+	autoPublishActiveKey = "auto_publish_active"
+)
 
 // GetAutoPublishConfig loads the auto fetch/publish scheduler settings from
 // app_settings, falling back to defaults when missing or invalid.
 func (r *SettingsRepository) GetAutoPublishConfig() models.AutoPublishConfig {
 	def := models.DefaultAutoPublishConfig()
+	if r == nil || r.db == nil {
+		return def
+	}
 	var raw string
 	err := r.db.QueryRow(`SELECT value FROM app_settings WHERE key = ?`, autoPublishKey).Scan(&raw)
 	if err != nil || raw == "" {
@@ -121,6 +127,9 @@ func (r *SettingsRepository) GetAutoPublishConfig() models.AutoPublishConfig {
 
 // SetAutoPublishConfig persists the scheduler configuration as JSON.
 func (r *SettingsRepository) SetAutoPublishConfig(cfg models.AutoPublishConfig) error {
+	if r == nil || r.db == nil {
+		return nil
+	}
 	raw, err := json.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("marshal auto publish config: %w", err)
@@ -132,6 +141,43 @@ func (r *SettingsRepository) SetAutoPublishConfig(cfg models.AutoPublishConfig) 
 		autoPublishKey, string(raw),
 	); err != nil {
 		return fmt.Errorf("upsert auto publish config: %w", err)
+	}
+	return nil
+}
+
+// GetAutoPublishActive returns whether the scheduler is active (running).
+// If the key has not been explicitly set in app_settings yet, it falls back to
+// checking whether AutoPublishConfig.Enabled is true, ensuring existing
+// configurations remain active across server restarts/rebuilds.
+func (r *SettingsRepository) GetAutoPublishActive() bool {
+	if r == nil || r.db == nil {
+		return false
+	}
+	var val string
+	err := r.db.QueryRow(`SELECT value FROM app_settings WHERE key = ?`, autoPublishActiveKey).Scan(&val)
+	if err != nil || val == "" {
+		return r.GetAutoPublishConfig().Enabled
+	}
+	return val == "true" || val == "1"
+}
+
+// SetAutoPublishActive persists the scheduler active status (true = running,
+// false = stopped) to app_settings.
+func (r *SettingsRepository) SetAutoPublishActive(active bool) error {
+	if r == nil || r.db == nil {
+		return nil
+	}
+	val := "false"
+	if active {
+		val = "true"
+	}
+	if _, err := r.db.Exec(`
+		INSERT INTO app_settings (key, value, updated_at)
+		VALUES (?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`,
+		autoPublishActiveKey, val,
+	); err != nil {
+		return fmt.Errorf("upsert auto publish active: %w", err)
 	}
 	return nil
 }
