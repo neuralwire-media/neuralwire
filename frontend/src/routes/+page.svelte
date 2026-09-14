@@ -30,7 +30,7 @@
 
 	// Feed state management with SSR-safe initial feed
 	const initialFeed = $derived<FeedState>({
-		articles: (data.news as News[]).slice(1),
+		articles: (data.news as News[]) || [],
 		page: 1,
 		totalPages: data.totalPages ?? 1,
 		total: data.total ?? (data.news as News[]).length
@@ -52,11 +52,7 @@
 
 	const visibleFeed = $derived(currentFeed.articles);
 	const hasMore = $derived(currentFeed.page < currentFeed.totalPages);
-	const canCollapse = $derived(
-		activeCategory === 'all'
-			? currentFeed.articles.length > 14 || currentFeed.page > 1
-			: currentFeed.articles.length > 15 || currentFeed.page > 1
-	);
+	const canCollapse = $derived(currentFeed.articles.length > 15 || currentFeed.page > 1);
 
 	const categories = $derived([
 		{ name: 'All News', slug: 'all' },
@@ -129,10 +125,7 @@
 			const catParam = activeCategory === 'all' ? undefined : activeCategory;
 			const res = await getNewsPage(fetch, catParam, undefined, nextPage, 15);
 
-			const existingIds = new Set([
-				...(activeCategory === 'all' ? heroArticles.map((a) => a.id) : []),
-				...feed.articles.map((a) => a.id)
-			]);
+			const existingIds = new Set(feed.articles.map((a) => a.id));
 			const newArticles = res.articles.filter((a) => !existingIds.has(a.id));
 
 			loadedFeeds[activeCategory] = {
