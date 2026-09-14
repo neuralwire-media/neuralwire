@@ -279,12 +279,16 @@
 								<button
 									type="button"
 									onclick={() => selectHero(index)}
-									class="h-2.5 rounded-full transition-all {index === heroIndex
-										? 'w-8 bg-[#22D3EE]'
-										: 'w-2.5 bg-slate-700 hover:bg-slate-500'}"
+									class="flex h-7 min-h-6 min-w-6 items-center justify-center p-1"
 									aria-label="Show featured article {index + 1}: {item.title}"
 									aria-current={index === heroIndex ? 'true' : undefined}
-								></button>
+								>
+									<span
+										class="h-2.5 rounded-full transition-all {index === heroIndex
+											? 'w-8 bg-[#22D3EE]'
+											: 'w-2.5 bg-slate-700 hover:bg-slate-500'}"
+									></span>
+								</button>
 							{/each}
 						</div>
 						<div class="font-mono text-[10px] tracking-widest text-slate-500">

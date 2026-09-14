@@ -1426,7 +1426,7 @@ func TestCacheControlHeaders(t *testing.T) {
 		wantCache string
 	}{
 		{"/_app/immutable/chunk.js", "public, max-age=31536000, immutable"},
-		{"/favicon.ico", "public, max-age=86400"},
+		{"/favicon.ico", "public, max-age=2592000"},
 		{"/api/healthz", "no-store"},
 		{"/api/news/trending", "public, max-age=60"},
 	}
