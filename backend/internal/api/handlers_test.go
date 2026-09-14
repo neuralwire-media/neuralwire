@@ -1348,8 +1348,11 @@ func TestStaticFallbackRouting(t *testing.T) {
 		t.Errorf("GET / = %d, want 200", rec.Code)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, `<link rel="preload" as="fetch" href="/api/news?page_size=30" crossorigin>`) {
+	if !strings.Contains(body, `<link rel="preload" as="fetch" href="/api/news?page_size=15" crossorigin>`) {
 		t.Errorf("GET / missing news API preload, got: %s", body)
+	}
+	if !strings.Contains(body, `<link rel="preload" as="fetch" href="/api/news/trending?window=week&limit=5" crossorigin>`) {
+		t.Errorf("GET / missing trending news API preload, got: %s", body)
 	}
 	if !strings.Contains(body, `<link rel="preload" as="fetch" href="/api/categories" crossorigin>`) {
 		t.Errorf("GET / missing categories API preload, got: %s", body)

@@ -84,7 +84,7 @@ export async function getNews(
 	customFetch?: typeof fetch,
 	categorySlug?: string,
 	searchQuery?: string,
-	pageSize: number = 30
+	pageSize: number = 15
 ): Promise<News[]> {
 	const f = getFetch(customFetch);
 
@@ -147,4 +147,32 @@ export function slugify(str: string): string {
 		.replace(/[^\w\s-]/g, '')
 		.replace(/[\s_-]+/g, '-')
 		.replace(/^-+|-+$/g, '');
+}
+
+export interface TrendingArticle {
+	id: number;
+	title: string;
+	slug: string;
+	source: string;
+	image_url?: string;
+	view_count: number;
+}
+
+export interface TrendingResponse {
+	window: string;
+	data: TrendingArticle[];
+}
+
+/**
+ * Fetch trending news articles.
+ */
+export async function getTrendingNews(
+	customFetch?: typeof fetch,
+	window: string = 'week',
+	limit: number = 5
+): Promise<TrendingArticle[]> {
+	const f = getFetch(customFetch);
+	const url = `${BASE_URL}/news/trending?window=${encodeURIComponent(window)}&limit=${limit}`;
+	const result = await fetchJsonCached<TrendingResponse>(url, f, AbortSignal.timeout(2000));
+	return result?.data ?? [];
 }

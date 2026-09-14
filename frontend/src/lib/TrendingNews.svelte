@@ -1,23 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { BASE_URL } from '$lib/api';
+	import { BASE_URL, type TrendingArticle, type TrendingResponse } from '$lib/api';
 
-	interface TrendingArticle {
-		id: number;
-		title: string;
-		slug: string;
-		source: string;
-		image_url?: string;
-		view_count: number;
-	}
+	let { initialArticles }: { initialArticles?: TrendingArticle[] } = $props();
 
-	interface TrendingResponse {
-		window: string;
-		data: TrendingArticle[];
-	}
-
-	let isLoading = $state(true);
-	let articles = $state<TrendingArticle[]>([]);
+	let isLoading = $state(!initialArticles || initialArticles.length === 0);
+	let articles = $state<TrendingArticle[]>(initialArticles || []);
 	let errorMessage = $state('');
 	let windowLabel = $state('week');
 
@@ -26,7 +14,9 @@
 	}
 
 	async function fetchTrending() {
-		isLoading = true;
+		if (!articles.length) {
+			isLoading = true;
+		}
 		errorMessage = '';
 
 		try {
@@ -35,7 +25,7 @@
 			});
 
 			if (!res.ok) {
-				errorMessage = 'Trending signal unavailable.';
+				if (!articles.length) errorMessage = 'Trending signal unavailable.';
 				return;
 			}
 
@@ -44,14 +34,16 @@
 			articles = result.data || [];
 		} catch (error) {
 			console.warn('Trending news fetch failed', error);
-			errorMessage = 'Trending signal unavailable.';
+			if (!articles.length) errorMessage = 'Trending signal unavailable.';
 		} finally {
 			isLoading = false;
 		}
 	}
 
 	onMount(() => {
-		fetchTrending();
+		if (!initialArticles || initialArticles.length === 0) {
+			fetchTrending();
+		}
 	});
 </script>
 
@@ -79,7 +71,7 @@
 			<div class="grid gap-3 md:grid-cols-5">
 				{#each [1, 2, 3, 4, 5] as index}
 					<div
-						class="h-24 animate-pulse rounded-lg border border-[rgba(255,255,255,0.06)] bg-[#0A0E17]/60"
+						class="h-24 rounded-lg border border-[rgba(255,255,255,0.06)] bg-[#0A0E17]/60"
 						aria-label="Loading trending item {index}"
 					></div>
 				{/each}

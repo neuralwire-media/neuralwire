@@ -403,7 +403,8 @@ func (s *Server) serveIndexHTML(w http.ResponseWriter, r *http.Request) {
 	var extraPreloads strings.Builder
 	extraPreloads.WriteString("\t\t<link rel=\"preload\" as=\"fetch\" href=\"/api/categories\" crossorigin>\n")
 	if cleanPath == "" || cleanPath == "index.html" {
-		extraPreloads.WriteString("\t\t<link rel=\"preload\" as=\"fetch\" href=\"/api/news?page_size=30\" crossorigin>\n")
+		extraPreloads.WriteString("\t\t<link rel=\"preload\" as=\"fetch\" href=\"/api/news?page_size=15\" crossorigin>\n")
+		extraPreloads.WriteString("\t\t<link rel=\"preload\" as=\"fetch\" href=\"/api/news/trending?window=week&limit=5\" crossorigin>\n")
 	}
 
 	var preloadImage string
