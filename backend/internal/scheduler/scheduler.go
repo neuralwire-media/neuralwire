@@ -49,12 +49,17 @@ func New(repo *repository.SettingsRepository, job Job, logger *slog.Logger) *Sch
 	if logger == nil {
 		logger = slog.Default()
 	}
+	initialActive := false
+	if repo != nil {
+		initialActive = repo.GetAutoPublishActive()
+	}
 	return &Scheduler{
 		repo:    repo,
 		job:     job,
 		logger:  logger,
 		stop:    make(chan struct{}),
 		stopped: make(chan struct{}),
+		active:  initialActive,
 	}
 }
 
@@ -90,10 +95,18 @@ func (s *Scheduler) Stop() {
 // SetActive toggles whether the scheduler acts on the stored config. This is
 // the admin "Start config / Stop config" control: saving config with
 // Enabled=true does not run anything until SetActive(true) is called.
+// It persists the running state in app_settings so that the scheduler running
+// state survives application rebuilds and container restarts.
 func (s *Scheduler) SetActive(active bool) {
 	s.mu.Lock()
 	s.active = active
 	s.mu.Unlock()
+
+	if s.repo != nil {
+		if err := s.repo.SetAutoPublishActive(active); err != nil {
+			s.logger.Error("scheduler: failed to persist active state", "error", err)
+		}
+	}
 }
 
 // Active reports whether the scheduler is currently active.

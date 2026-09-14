@@ -20,6 +20,7 @@ import (
 	"neuralwire/backend/internal/fetcher"
 	"neuralwire/backend/internal/models"
 	"neuralwire/backend/internal/repository"
+	"neuralwire/backend/internal/scheduler"
 )
 
 const (
@@ -710,6 +711,117 @@ func TestSettingsEndpoints(t *testing.T) {
 	// Requires auth
 	if rec := doJSON(t, s, http.MethodGet, "/api/admin/settings", nil); rec.Code != http.StatusUnauthorized {
 		t.Errorf("get settings without token = %d, want 401", rec.Code)
+	}
+}
+
+func TestAdminAutoPublishPersistence(t *testing.T) {
+	db, err := database.Open(":memory:")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+
+	if err := database.Migrate(db); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if err := database.Seed(db); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	settingsRepo := repository.NewSettingsRepository(db)
+	sched := scheduler.New(settingsRepo, scheduler.Job{}, nil)
+
+	s := NewServer(ServerOptions{
+		NewsRepo:     repository.NewNewsRepository(db),
+		CategoryRepo: repository.NewCategoryRepository(db),
+		SettingsRepo: settingsRepo,
+		AllowOrigins: []string{"http://localhost:5173"},
+		Auth:         auth.NewManager("test-secret", 0),
+		AdminUser:    testAdminUser,
+		AdminPass:    testAdminPass,
+		Logger:       log.New(io.Discard, "", 0),
+		Scheduler:    sched,
+	})
+	token := adminToken(t, s)
+
+	// 1. Initial state: running should be false
+	rec := doJSONAs(t, s, http.MethodGet, "/api/admin/autopublish", nil, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get autopublish status = %d", rec.Code)
+	}
+	var res autoPublishResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if res.Running {
+		t.Errorf("expected initial running = false, got true")
+	}
+
+	// 2. Start scheduler via API
+	rec = doJSONAs(t, s, http.MethodPost, "/api/admin/autopublish/start", nil, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("start autopublish status = %d", rec.Code)
+	}
+
+	// GET should now show running = true
+	rec = doJSONAs(t, s, http.MethodGet, "/api/admin/autopublish", nil, token)
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !res.Running {
+		t.Errorf("expected running = true after start, got false")
+	}
+
+	// 3. Simulate container rebuild / server restart with same DB
+	schedRebuilt := scheduler.New(settingsRepo, scheduler.Job{}, nil)
+	sRebuilt := NewServer(ServerOptions{
+		NewsRepo:     repository.NewNewsRepository(db),
+		CategoryRepo: repository.NewCategoryRepository(db),
+		SettingsRepo: settingsRepo,
+		AllowOrigins: []string{"http://localhost:5173"},
+		Auth:         auth.NewManager("test-secret", 0),
+		AdminUser:    testAdminUser,
+		AdminPass:    testAdminPass,
+		Logger:       log.New(io.Discard, "", 0),
+		Scheduler:    schedRebuilt,
+	})
+	tokenRebuilt := adminToken(t, sRebuilt)
+
+	rec = doJSONAs(t, sRebuilt, http.MethodGet, "/api/admin/autopublish", nil, tokenRebuilt)
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !res.Running {
+		t.Errorf("expected running = true across server rebuild/restart, got false")
+	}
+
+	// 4. Stop scheduler via API
+	rec = doJSONAs(t, sRebuilt, http.MethodPost, "/api/admin/autopublish/stop", nil, tokenRebuilt)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("stop autopublish status = %d", rec.Code)
+	}
+
+	// 5. Simulate rebuild again after stop
+	schedStopped := scheduler.New(settingsRepo, scheduler.Job{}, nil)
+	sStopped := NewServer(ServerOptions{
+		NewsRepo:     repository.NewNewsRepository(db),
+		CategoryRepo: repository.NewCategoryRepository(db),
+		SettingsRepo: settingsRepo,
+		AllowOrigins: []string{"http://localhost:5173"},
+		Auth:         auth.NewManager("test-secret", 0),
+		AdminUser:    testAdminUser,
+		AdminPass:    testAdminPass,
+		Logger:       log.New(io.Discard, "", 0),
+		Scheduler:    schedStopped,
+	})
+	tokenStopped := adminToken(t, sStopped)
+
+	rec = doJSONAs(t, sStopped, http.MethodGet, "/api/admin/autopublish", nil, tokenStopped)
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if res.Running {
+		t.Errorf("expected running = false across server rebuild after stop, got true")
 	}
 }
 
