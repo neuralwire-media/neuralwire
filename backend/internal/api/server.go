@@ -41,6 +41,7 @@ type Server struct {
 	newsRepo     *repository.NewsRepository
 	categoryRepo *repository.CategoryRepository
 	settingsRepo *repository.SettingsRepository
+	sourceRepo   *repository.RSSSourceRepository
 	allowOrigins []string
 	auth         *auth.Manager
 	adminUser    string
@@ -92,6 +93,7 @@ type ServerOptions struct {
 	NewsRepo     *repository.NewsRepository
 	CategoryRepo *repository.CategoryRepository
 	SettingsRepo *repository.SettingsRepository
+	SourceRepo   *repository.RSSSourceRepository
 	AllowOrigins []string
 	Auth         *auth.Manager
 	AdminUser    string
@@ -166,6 +168,7 @@ func NewServer(opts ServerOptions) *Server {
 		newsRepo:           opts.NewsRepo,
 		categoryRepo:       opts.CategoryRepo,
 		settingsRepo:       opts.SettingsRepo,
+		sourceRepo:         opts.SourceRepo,
 		allowOrigins:       opts.AllowOrigins,
 		auth:               opts.Auth,
 		adminUser:          opts.AdminUser,
@@ -249,6 +252,12 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/admin/autopublish/stop", s.requireAuth(s.csrfProtect(http.HandlerFunc(s.handleStopAutoPublish))))
 	mux.Handle("POST /api/admin/upload-image", s.requireAuth(s.csrfProtect(http.HandlerFunc(s.handleUploadImage))))
 	mux.Handle("GET /api/admin/backup", s.requireAuth(http.HandlerFunc(s.handleBackup)))
+	mux.Handle("GET /api/admin/sources", s.requireAuth(http.HandlerFunc(s.handleAdminListSources)))
+	mux.Handle("POST /api/admin/sources", s.requireAuth(s.csrfProtect(http.HandlerFunc(s.handleAdminCreateSource))))
+	mux.Handle("PUT /api/admin/sources/{id}", s.requireAuth(s.csrfProtect(http.HandlerFunc(s.handleAdminUpdateSource))))
+	mux.Handle("PATCH /api/admin/sources/{id}/toggle", s.requireAuth(s.csrfProtect(http.HandlerFunc(s.handleAdminToggleSource))))
+	mux.Handle("DELETE /api/admin/sources/{id}", s.requireAuth(s.csrfProtect(http.HandlerFunc(s.handleAdminDeleteSource))))
+	mux.Handle("POST /api/admin/sources/test", s.requireAuth(s.csrfProtect(http.HandlerFunc(s.handleAdminTestFeed))))
 	mux.Handle("GET /api/admin/analytics", s.requireAuth(http.HandlerFunc(s.handleAdminAnalytics)))
 	mux.Handle("/api/admin/", s.requireAuth(s.csrfProtect(admin)))
 

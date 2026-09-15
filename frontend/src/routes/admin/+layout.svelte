@@ -113,6 +113,14 @@
 						Rejected
 					</a>
 					<a
+						href="/admin/sources"
+						class="rounded px-3 py-1.5 transition-colors {$page.url.pathname === '/admin/sources'
+							? 'bg-[#22D3EE]/5 text-[#22D3EE]'
+							: 'text-slate-400 hover:text-white'}"
+					>
+						Sources
+					</a>
+					<a
 						href="/admin/analytics"
 						class="rounded px-3 py-1.5 transition-colors {$page.url.pathname === '/admin/analytics'
 							? 'bg-[#22D3EE]/5 text-[#22D3EE]'
@@ -161,6 +169,11 @@
 					href="/admin/rejected"
 					class={$page.url.pathname === '/admin/rejected' ? 'text-[#22D3EE]' : 'text-slate-400'}
 					>REJ</a
+				>
+				<a
+					href="/admin/sources"
+					class={$page.url.pathname === '/admin/sources' ? 'text-[#22D3EE]' : 'text-slate-400'}
+					>SOURCES</a
 				>
 				<a
 					href="/admin/analytics"

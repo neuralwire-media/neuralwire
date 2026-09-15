@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -48,6 +49,7 @@ func newTestServer(t *testing.T) *Server {
 		NewsRepo:     repository.NewNewsRepository(db),
 		CategoryRepo: repository.NewCategoryRepository(db),
 		SettingsRepo: repository.NewSettingsRepository(db),
+		SourceRepo:   repository.NewRSSSourceRepository(db),
 		AllowOrigins: []string{"http://localhost:5173", "http://127.0.0.1:5173"},
 		Auth:         auth.NewManager("test-secret", 0),
 		AdminUser:    testAdminUser,
@@ -1745,5 +1747,157 @@ func TestAdminAnalytics(t *testing.T) {
 	}
 	if resp.System.MemoryAllocMB <= 0 {
 		t.Errorf("memory_alloc_mb = %f, want > 0", resp.System.MemoryAllocMB)
+	}
+}
+
+func TestAdminSourcesCRUD(t *testing.T) {
+	s := newTestServer(t)
+	token := adminToken(t, s)
+
+	// 1. Unauthorized GET /api/admin/sources
+	rec := doJSON(t, s, http.MethodGet, "/api/admin/sources", nil)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("unauthorized get sources = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+
+	// 2. List sources (from seed)
+	rec = doJSONAs(t, s, http.MethodGet, "/api/admin/sources", nil, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get sources = %d, want %d", rec.Code, http.StatusOK)
+	}
+	var listResp struct {
+		Data []models.RSSSource `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("unmarshal sources: %v", err)
+	}
+	initialCount := len(listResp.Data)
+	if initialCount == 0 {
+		t.Errorf("expected seeded sources, got 0")
+	}
+
+	// 3. Create a new source
+	createReq := map[string]any{
+		"name":     "Custom AI Feed",
+		"url":      "https://example.com/custom-feed.xml",
+		"category": "ai",
+		"enabled":  true,
+	}
+	rec = doJSONAs(t, s, http.MethodPost, "/api/admin/sources", createReq, token)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create source code = %d, want 201, body: %s", rec.Code, rec.Body.String())
+	}
+	var created models.RSSSource
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("unmarshal created source: %v", err)
+	}
+	if created.ID == 0 || created.Name != "Custom AI Feed" || !created.Enabled {
+		t.Errorf("unexpected created source: %+v", created)
+	}
+
+	// 4. Duplicate URL -> 409 Conflict
+	rec = doJSONAs(t, s, http.MethodPost, "/api/admin/sources", createReq, token)
+	if rec.Code != http.StatusConflict {
+		t.Errorf("duplicate url code = %d, want 409", rec.Code)
+	}
+
+	// 5. Update source
+	updateReq := map[string]any{
+		"name":     "Custom AI Feed Updated",
+		"url":      "https://example.com/custom-feed.xml",
+		"category": "hardware",
+		"enabled":  false,
+	}
+	rec = doJSONAs(t, s, http.MethodPut, fmt.Sprintf("/api/admin/sources/%d", created.ID), updateReq, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update source code = %d, want 200", rec.Code)
+	}
+	var updated models.RSSSource
+	if err := json.Unmarshal(rec.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("unmarshal updated source: %v", err)
+	}
+	if updated.Name != "Custom AI Feed Updated" || updated.Category != "hardware" || updated.Enabled {
+		t.Errorf("unexpected updated source: %+v", updated)
+	}
+
+	// 6. Toggle source
+	rec = doJSONAs(t, s, http.MethodPatch, fmt.Sprintf("/api/admin/sources/%d/toggle", created.ID), map[string]any{"enabled": true}, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("toggle source code = %d, want 200", rec.Code)
+	}
+
+	// 7. Delete source
+	rec = doJSONAs(t, s, http.MethodDelete, fmt.Sprintf("/api/admin/sources/%d", created.ID), nil, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete source code = %d, want 200", rec.Code)
+	}
+
+	// 8. Delete again -> 404
+	rec = doJSONAs(t, s, http.MethodDelete, fmt.Sprintf("/api/admin/sources/%d", created.ID), nil, token)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("second delete code = %d, want 404", rec.Code)
+	}
+}
+
+func TestAdminSourcesProbe(t *testing.T) {
+	// Setup mock HTTP server serving a valid RSS XML
+	mockRSS := `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Mock AI Feed</title>
+    <description>Latest AI testing updates</description>
+    <link>https://example.com</link>
+    <item>
+      <title>Article 1</title>
+      <link>https://example.com/1</link>
+      <pubDate>Mon, 01 Jan 2026 00:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Article 2</title>
+      <link>https://example.com/2</link>
+      <pubDate>Tue, 02 Jan 2026 00:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = w.Write([]byte(mockRSS))
+	}))
+	defer ts.Close()
+
+	s := newTestServer(t)
+	token := adminToken(t, s)
+
+	// 1. Probe valid mock feed
+	rec := doJSONAs(t, s, http.MethodPost, "/api/admin/sources/test", map[string]string{"url": ts.URL}, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("probe valid code = %d, want 200", rec.Code)
+	}
+	var resp probeFeedResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal probe resp: %v", err)
+	}
+	if !resp.Valid || resp.Title != "Mock AI Feed" || resp.ItemCount != 2 || len(resp.Items) != 2 {
+		t.Errorf("unexpected probe response: %+v", resp)
+	}
+
+	// 2. Probe invalid URL (bad scheme)
+	rec = doJSONAs(t, s, http.MethodPost, "/api/admin/sources/test", map[string]string{"url": "ftp://invalid.com"}, token)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("invalid scheme code = %d, want 400", rec.Code)
+	}
+
+	// 3. Probe unreachable URL -> returns valid: false with error
+	rec = doJSONAs(t, s, http.MethodPost, "/api/admin/sources/test", map[string]string{"url": "http://127.0.0.1:59999/nonexistent"}, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unreachable probe code = %d, want 200 with valid:false", rec.Code)
+	}
+	var unreachResp probeFeedResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &unreachResp); err != nil {
+		t.Fatalf("unmarshal unreach resp: %v", err)
+	}
+	if unreachResp.Valid {
+		t.Errorf("expected valid = false for unreachable feed, got true")
 	}
 }
