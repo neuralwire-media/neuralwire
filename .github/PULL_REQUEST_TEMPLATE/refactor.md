@@ -25,7 +25,7 @@
 ### Live Localhost End-to-End (E2E) Verification (Mandatory)
 - [ ] Server booted cleanly on localhost (`go run ./cmd/server` / preview) with 0 startup crashes/panics.
 - [ ] Live HTTP requests / UI workflows tested end-to-end against localhost matching implementation plan.
-- [ ] Server logs verified clean with 0 unhandled errors or unexpected 5xx responses.
+- [ ] Server logs & responses verified clean with 0 unexpected HTTP errors (no unintended 4xx/5xx responses) and proper status codes (2xx/explicit error contracts).
 
 ## Local Verification Evidence
 <!-- Provide the actual terminal execution output summary showing 0 errors across test/lint suites and localhost E2E tests. -->
