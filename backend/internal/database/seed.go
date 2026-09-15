@@ -21,25 +21,36 @@ var defaultRSSSources = []struct {
 	url      string
 	category string
 }{
-	// AI category
+	// AI category (5 sources)
 	{name: "OpenAI Blog", url: "https://openai.com/blog/rss.xml", category: "ai"},
 	{name: "Google AI Blog", url: "https://blog.google/technology/ai/rss/", category: "ai"},
 	{name: "Anthropic Blog", url: "https://www.anthropic.com/feed", category: "ai"},
 	{name: "Meta AI Blog", url: "https://ai.meta.com/blog/rss/", category: "ai"},
 	{name: "DeepMind Blog", url: "https://deepmind.google/blog/rss.xml", category: "ai"},
-	// Tools category
+	// Tools category (5 sources)
 	{name: "Hugging Face Blog", url: "https://huggingface.co/blog/feed.xml", category: "tools"},
 	{name: "AWS Machine Learning", url: "https://aws.amazon.com/blogs/machine-learning/feed/", category: "tools"},
 	{name: "GitHub Blog", url: "https://github.blog/feed/", category: "tools"},
-	// Research category
+	{name: "LangChain Blog", url: "https://blog.langchain.dev/rss/", category: "tools"},
+	{name: "NVIDIA Developer Blog", url: "https://developer.nvidia.com/blog/feed", category: "tools"},
+	// Research category (5 sources)
 	{name: "MIT AI News", url: "https://news.mit.edu/topic/mitartificial-intelligence2-rss.xml", category: "research"},
 	{name: "arXiv AI", url: "https://rss.arxiv.org/rss/cs.AI", category: "research"},
-	// Industry category
+	{name: "Stanford HAI", url: "https://hai.stanford.edu/news/rss.xml", category: "research"},
+	{name: "Microsoft Research", url: "https://www.microsoft.com/en-us/research/feed/", category: "research"},
+	{name: "The Gradient", url: "https://gradientpub.substack.com/feed", category: "research"},
+	// Industry category (5 sources)
 	{name: "TechCrunch AI", url: "https://techcrunch.com/category/artificial-intelligence/feed/", category: "industry"},
 	{name: "VentureBeat AI", url: "https://venturebeat.com/category/ai/feed/", category: "industry"},
 	{name: "The Verge AI", url: "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml", category: "industry"},
-	// Machine Learning category
+	{name: "Ars Technica Tech", url: "https://feeds.arstechnica.com/arstechnica/technology-lab", category: "industry"},
+	{name: "Wired AI", url: "https://www.wired.com/feed/tag/ai/latest/rss", category: "industry"},
+	// Machine Learning category (5 sources)
 	{name: "Machine Learning Mastery", url: "https://machinelearningmastery.com/feed/", category: "machine-learning"},
+	{name: "Apple ML Research", url: "https://machinelearning.apple.com/rss.xml", category: "machine-learning"},
+	{name: "Google Cloud AI & ML", url: "https://cloud.google.com/blog/products/ai-machine-learning/rss/", category: "machine-learning"},
+	{name: "MarkTechPost", url: "https://www.marktechpost.com/feed/", category: "machine-learning"},
+	{name: "Towards AI", url: "https://towardsai.net/feed", category: "machine-learning"},
 }
 
 // defaultSettings seeds the admin-configurable scoring thresholds on first
