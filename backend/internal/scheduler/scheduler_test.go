@@ -226,4 +226,3 @@ func TestNoImmediateExecutionOnStartup(t *testing.T) {
 		t.Errorf("expected auto post to not execute immediately on startup")
 	}
 }
-
