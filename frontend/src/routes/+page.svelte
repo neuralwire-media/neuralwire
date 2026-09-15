@@ -176,7 +176,7 @@
 
 <svelte:head>
 	<link rel="canonical" href="{getSiteUrl()}/" />
-	<meta property="og:title" content="Neuralwire | AI News & Editorial" />
+	<meta property="og:title" content="NeuralWire | AI News & Editorial" />
 	<meta
 		property="og:description"
 		content="An editorial news portal for artificial intelligence, neural networks, and the future of computation."
@@ -184,7 +184,7 @@
 	<meta property="og:type" content="website" />
 	<meta property="og:url" content="{getSiteUrl()}/" />
 	<meta property="og:image" content="{getSiteUrl()}/favicon.svg" />
-	<meta name="twitter:title" content="Neuralwire | AI News & Editorial" />
+	<meta name="twitter:title" content="NeuralWire | AI News & Editorial" />
 	<meta
 		name="twitter:description"
 		content="An editorial news portal for artificial intelligence, neural networks, and the future of computation."

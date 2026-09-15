@@ -77,26 +77,26 @@
 </script>
 
 <svelte:head>
-	<title>{category.name} | Neuralwire AI News</title>
+	<title>{category.name} | NeuralWire AI News</title>
 	<meta
 		name="description"
-		content="Explore news and in-depth articles about {category.name} from the editors of Neuralwire."
+		content="Explore news and in-depth articles about {category.name} from the editors of NeuralWire."
 	/>
 	<meta name="robots" content="index, follow" />
 	<link rel="canonical" href="{getSiteUrl()}/category/{category.slug}" />
-	<meta property="og:title" content="{category.name} | Neuralwire AI News" />
+	<meta property="og:title" content="{category.name} | NeuralWire AI News" />
 	<meta
 		property="og:description"
-		content="Explore news and in-depth articles about {category.name} from the editors of Neuralwire."
+		content="Explore news and in-depth articles about {category.name} from the editors of NeuralWire."
 	/>
 	<meta property="og:type" content="website" />
 	<meta property="og:url" content="{getSiteUrl()}/category/{category.slug}" />
 	<meta property="og:image" content="{getSiteUrl()}/favicon.svg" />
 	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content="{category.name} | Neuralwire AI News" />
+	<meta name="twitter:title" content="{category.name} | NeuralWire AI News" />
 	<meta
 		name="twitter:description"
-		content="Explore news and in-depth articles about {category.name} from the editors of Neuralwire."
+		content="Explore news and in-depth articles about {category.name} from the editors of NeuralWire."
 	/>
 	<meta name="twitter:image" content="{getSiteUrl()}/favicon.svg" />
 </svelte:head>

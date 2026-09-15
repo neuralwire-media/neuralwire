@@ -1,5 +1,5 @@
 <svelte:head>
-	<title>Copyright & DMCA Policy | Neuralwire</title>
+	<title>Copyright & DMCA Policy | NeuralWire</title>
 </svelte:head>
 
 <section class="mx-auto w-full max-w-3xl flex-grow px-4 py-16 sm:px-6 md:py-24 lg:px-8">
