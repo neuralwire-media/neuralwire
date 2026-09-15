@@ -1696,3 +1696,54 @@ func TestBulkNewsAction(t *testing.T) {
 		t.Errorf("n4 should be deleted, got %+v", n4)
 	}
 }
+
+func TestAdminAnalytics(t *testing.T) {
+	s := newTestServer(t)
+	token := adminToken(t, s)
+
+	// Create test article and views
+	id, err := s.newsRepo.Create(models.News{
+		Title:      "Analytics Test Article",
+		URL:        "https://example.com/analytics-test",
+		Source:     "src",
+		Category:   "ai",
+		ValueLabel: "HIGH",
+	})
+	if err != nil {
+		t.Fatalf("create news: %v", err)
+	}
+	_ = s.newsRepo.RecordView(id, "v1")
+	_ = s.newsRepo.RecordView(id, "v2")
+
+	// 1. Unauthorized
+	rec := doJSON(t, s, http.MethodGet, "/api/admin/analytics", nil)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("unauthorized code = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+
+	// 2. Authorized
+	rec = doJSONAs(t, s, http.MethodGet, "/api/admin/analytics", nil, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("analytics code = %d, want %d, body: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp adminAnalyticsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode analytics: %v", err)
+	}
+
+	if resp.Views.TotalViews < 2 {
+		t.Errorf("total_views = %d, want >= 2", resp.Views.TotalViews)
+	}
+	if len(resp.Views.TopArticles) == 0 {
+		t.Errorf("top_articles is empty")
+	} else if resp.Views.TopArticles[0].ViewCount < 2 {
+		t.Errorf("top article view_count = %d, want >= 2", resp.Views.TopArticles[0].ViewCount)
+	}
+	if resp.Content.ScoreDistribution.High < 1 {
+		t.Errorf("score_distribution.high = %d, want >= 1", resp.Content.ScoreDistribution.High)
+	}
+	if resp.System.MemoryAllocMB <= 0 {
+		t.Errorf("memory_alloc_mb = %f, want > 0", resp.System.MemoryAllocMB)
+	}
+}

@@ -87,6 +87,46 @@ func (m *Metrics) AICall(failed bool) {
 	}
 }
 
+// Snapshot holds a point-in-time copy of metrics counters.
+type Snapshot struct {
+	HTTPRequestsTotal int64   `json:"http_requests_total"`
+	HTTPErrorsTotal   int64   `json:"http_errors_total"`
+	HTTPAvgLatencyMs  float64 `json:"http_avg_latency_ms"`
+	FetchCyclesTotal  int64   `json:"fetch_cycles_total"`
+	FetchCyclesFailed int64   `json:"fetch_cycles_failed"`
+	AICallsTotal      int64   `json:"ai_calls_total"`
+	AICallsFailed     int64   `json:"ai_calls_failed"`
+}
+
+// Snapshot returns a structured copy of the current metrics.
+func (m *Metrics) Snapshot() Snapshot {
+	if m == nil {
+		return Snapshot{}
+	}
+	var totalReqs int64
+	m.httpRequestsMu.Lock()
+	for _, c := range m.httpRequests {
+		totalReqs += c.Load()
+	}
+	m.httpRequestsMu.Unlock()
+
+	var avgLatency float64
+	count := m.reqCount.Load()
+	if count > 0 {
+		avgLatency = float64(m.reqSumMs.Load()) / float64(count)
+	}
+
+	return Snapshot{
+		HTTPRequestsTotal: totalReqs,
+		HTTPErrorsTotal:   m.httpErrors.Load(),
+		HTTPAvgLatencyMs:  avgLatency,
+		FetchCyclesTotal:  m.fetchCycles.Load(),
+		FetchCyclesFailed: m.fetchCyclesFailed.Load(),
+		AICallsTotal:      m.aiCalls.Load(),
+		AICallsFailed:     m.aiCallsFailed.Load(),
+	}
+}
+
 // WritePrometheus renders all counters in Prometheus text exposition format.
 func (m *Metrics) WritePrometheus(w io.Writer) {
 	if m == nil {

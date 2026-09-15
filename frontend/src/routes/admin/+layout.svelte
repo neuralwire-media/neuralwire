@@ -112,6 +112,14 @@
 					>
 						Rejected
 					</a>
+					<a
+						href="/admin/analytics"
+						class="rounded px-3 py-1.5 transition-colors {$page.url.pathname === '/admin/analytics'
+							? 'bg-[#22D3EE]/5 text-[#22D3EE]'
+							: 'text-slate-400 hover:text-white'}"
+					>
+						Analytics
+					</a>
 				</nav>
 
 				<!-- Exit Session -->
@@ -153,6 +161,11 @@
 					href="/admin/rejected"
 					class={$page.url.pathname === '/admin/rejected' ? 'text-[#22D3EE]' : 'text-slate-400'}
 					>REJ</a
+				>
+				<a
+					href="/admin/analytics"
+					class={$page.url.pathname === '/admin/analytics' ? 'text-[#22D3EE]' : 'text-slate-400'}
+					>METRICS</a
 				>
 			</div>
 		</header>

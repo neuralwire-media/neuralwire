@@ -1,9 +1,12 @@
 package scheduler
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"neuralwire/backend/internal/database"
+	"neuralwire/backend/internal/fetcher"
 	"neuralwire/backend/internal/models"
 	"neuralwire/backend/internal/repository"
 )
@@ -170,3 +173,57 @@ func TestActiveFallbackToConfigEnabled(t *testing.T) {
 		t.Errorf("expected Active() to be true via fallback to config.Enabled")
 	}
 }
+
+func TestNoImmediateExecutionOnStartup(t *testing.T) {
+	db, err := database.Open(":memory:")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+
+	if err := database.Migrate(db); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if err := database.Seed(db); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	repo := repository.NewSettingsRepository(db)
+	if err := repo.SetAutoPublishConfig(models.AutoPublishConfig{
+		Enabled:             true,
+		AutoPostEnabled:     true,
+		IntervalMinutes:     60,
+		PostIntervalMinutes: 60,
+	}); err != nil {
+		t.Fatalf("set config: %v", err)
+	}
+	if err := repo.SetAutoPublishActive(true); err != nil {
+		t.Fatalf("set active: %v", err)
+	}
+
+	fetchExecuted := false
+	postExecuted := false
+
+	sched := New(repo, Job{
+		Fetch: func(ctx context.Context) (fetcher.FetchStats, error) {
+			fetchExecuted = true
+			return fetcher.FetchStats{}, nil
+		},
+		AutoPost: func(ctx context.Context, cfg models.AutoPublishConfig) (int, error) {
+			postExecuted = true
+			return 0, nil
+		},
+	}, nil)
+
+	sched.Start()
+	time.Sleep(50 * time.Millisecond)
+	sched.Stop()
+
+	if fetchExecuted {
+		t.Errorf("expected fetch to not execute immediately on startup")
+	}
+	if postExecuted {
+		t.Errorf("expected auto post to not execute immediately on startup")
+	}
+}
+

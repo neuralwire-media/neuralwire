@@ -53,13 +53,16 @@ func New(repo *repository.SettingsRepository, job Job, logger *slog.Logger) *Sch
 	if repo != nil {
 		initialActive = repo.GetAutoPublishActive()
 	}
+	now := time.Now()
 	return &Scheduler{
-		repo:    repo,
-		job:     job,
-		logger:  logger,
-		stop:    make(chan struct{}),
-		stopped: make(chan struct{}),
-		active:  initialActive,
+		repo:      repo,
+		job:       job,
+		logger:    logger,
+		stop:      make(chan struct{}),
+		stopped:   make(chan struct{}),
+		active:    initialActive,
+		lastFetch: now,
+		lastPost:  now,
 	}
 }
 
@@ -118,10 +121,6 @@ func (s *Scheduler) Active() bool {
 
 func (s *Scheduler) loop() {
 	defer close(s.stopped)
-
-	// Run immediately if enabled so the operator sees the effect right away;
-	// otherwise wait one interval before the first check.
-	s.runOnceIfEnabled()
 
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
