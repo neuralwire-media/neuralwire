@@ -330,6 +330,67 @@ func (r *NewsRepository) DeleteByStatus(status string) error {
 	return nil
 }
 
+// BulkSetStatus updates the status for a list of article IDs in a single query.
+// When transitioning to published, published_at is set to now for articles where it is not already set.
+func (r *NewsRepository) BulkSetStatus(ids []int64, status models.NewsStatus) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]any, 0, len(ids)+2)
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+	inClause := strings.Join(placeholders, ",")
+
+	var query string
+	switch status {
+	case models.StatusPublished:
+		now := time.Now().UTC().Format(time.RFC3339)
+		query = fmt.Sprintf(`
+			UPDATE news
+			SET status = ?, published_at = COALESCE(published_at, ?)
+			WHERE id IN (%s)`, inClause)
+		args = append([]any{string(status), now}, args...)
+	case models.StatusRejected, models.StatusDraft:
+		query = fmt.Sprintf(`
+			UPDATE news
+			SET status = ?
+			WHERE id IN (%s)`, inClause)
+		args = append([]any{string(status)}, args...)
+	default:
+		return 0, fmt.Errorf("unsupported status transition: %s", status)
+	}
+
+	res, err := r.db.Exec(query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("bulk set status: %w", err)
+	}
+	return res.RowsAffected()
+}
+
+// BulkDelete removes multiple articles by their IDs in a single query.
+func (r *NewsRepository) BulkDelete(ids []int64) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	inClause := strings.Join(placeholders, ",")
+
+	query := fmt.Sprintf(`DELETE FROM news WHERE id IN (%s)`, inClause)
+	res, err := r.db.Exec(query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("bulk delete news: %w", err)
+	}
+	return res.RowsAffected()
+}
+
 // viewCooldown bounds how often the same viewer can count as a new read for
 // the same article, so refreshes or accidental re-opens don't inflate views.
 const viewCooldown = 6 * time.Hour

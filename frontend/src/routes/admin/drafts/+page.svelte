@@ -30,6 +30,93 @@
 	let toast = $state<{ type: 'success' | 'error'; message: string } | null>(null);
 	let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
+	// Bulk action state
+	let selectedIds = $state<number[]>([]);
+	let isBulkLoading = $state(false);
+	let bulkModal = $state<{
+		open: boolean;
+		action: 'publish' | 'reject' | 'delete' | null;
+	}>({ open: false, action: null });
+
+	const isAllSelected = $derived(
+		articles.length > 0 && articles.every((a) => selectedIds.includes(a.id))
+	);
+
+	function toggleSelectAll() {
+		if (isAllSelected) {
+			selectedIds = [];
+		} else {
+			selectedIds = articles.map((a) => a.id);
+		}
+	}
+
+	function toggleSelect(id: number) {
+		if (selectedIds.includes(id)) {
+			selectedIds = selectedIds.filter((item) => item !== id);
+		} else {
+			selectedIds = [...selectedIds, id];
+		}
+	}
+
+	function clearSelection() {
+		selectedIds = [];
+	}
+
+	function openBulkConfirm(action: 'publish' | 'reject' | 'delete') {
+		bulkModal = { open: true, action };
+	}
+
+	function closeBulkConfirm() {
+		bulkModal = { open: false, action: null };
+	}
+
+	async function executeBulkAction() {
+		if (!bulkModal.action || selectedIds.length === 0) return;
+		const token = localStorage.getItem('admin_token');
+		if (!token) return;
+
+		isBulkLoading = true;
+		const action = bulkModal.action;
+
+		try {
+			const res = await fetch(`${BASE_URL}/admin/news/bulk`, {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${token}`,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					action: action,
+					ids: selectedIds
+				})
+			});
+
+			if (res.ok) {
+				const data = await res.json();
+				closeBulkConfirm();
+				clearSelection();
+				showToast(
+					'success',
+					`Bulk ${action} complete: ${data.processed_count} draft(s) processed.`
+				);
+				await fetchDrafts(currentPage);
+			} else {
+				if (res.status === 401 || res.status === 403) {
+					localStorage.removeItem('admin_token');
+					window.location.reload();
+					return;
+				}
+				const data = await res.json().catch(() => ({}));
+				showToast('error', data.error || `Bulk ${action} operation failed.`);
+			}
+		} catch (err) {
+			console.error('Bulk action error:', err);
+			showToast('error', `Network error executing bulk ${action}.`);
+		} finally {
+			isBulkLoading = false;
+		}
+	}
+
 	function showToast(type: 'success' | 'error', message: string) {
 		toast = { type, message };
 		if (toastTimer) clearTimeout(toastTimer);
@@ -108,6 +195,7 @@
 	async function fetchDrafts(pageNumber: number) {
 		isLoading = true;
 		errorMessage = '';
+		selectedIds = [];
 		const token = localStorage.getItem('admin_token');
 		if (!token) return;
 
@@ -531,14 +619,59 @@
 			</p>
 		</div>
 	{:else}
+		<!-- Bulk Selection Sub-header -->
+		<div
+			class="mb-4 flex items-center justify-between rounded-lg border border-[rgba(255,255,255,0.06)] bg-[#0A0E17]/60 px-4 py-2.5 font-mono text-xs text-slate-400"
+		>
+			<label class="flex cursor-pointer items-center gap-2.5 select-none">
+				<input
+					type="checkbox"
+					checked={isAllSelected}
+					onchange={toggleSelectAll}
+					class="h-4 w-4 cursor-pointer rounded border-slate-700 bg-slate-900 text-[#22D3EE] accent-[#22D3EE] focus:ring-[#22D3EE]/30"
+				/>
+				<span class="transition-colors hover:text-white">
+					Select All on Page ({articles.length})
+				</span>
+			</label>
+			{#if selectedIds.length > 0}
+				<div class="flex items-center gap-3">
+					<span class="font-bold text-[#22D3EE]"
+						>{selectedIds.length} of {articles.length} selected</span
+					>
+					<button
+						onclick={clearSelection}
+						class="cursor-pointer text-slate-500 underline transition-colors hover:text-slate-300"
+					>
+						Clear
+					</button>
+				</div>
+			{/if}
+		</div>
+
 		<!-- List -->
 		<div class="flex-grow space-y-6">
 			{#each articles as item (item.id)}
 				<div
-					class="group glow-hover relative flex flex-col justify-between gap-6 rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#0F172A]/20 p-6 md:flex-row"
+					class="group glow-hover relative flex flex-col justify-between gap-6 rounded-xl border p-6 transition-all md:flex-row {selectedIds.includes(
+						item.id
+					)
+						? 'border-[#22D3EE]/60 bg-[#0F172A]/50 ring-1 ring-[#22D3EE]/20'
+						: 'border-[rgba(255,255,255,0.08)] bg-[#0F172A]/20'}"
 				>
-					<!-- Article Info -->
+					<!-- Article Info & Selection Checkbox -->
 					<div class="flex flex-grow items-start gap-4">
+						<!-- Checkbox -->
+						<div class="flex items-center pt-1">
+							<input
+								type="checkbox"
+								checked={selectedIds.includes(item.id)}
+								onchange={() => toggleSelect(item.id)}
+								class="h-4 w-4 cursor-pointer rounded border-slate-700 bg-slate-900 text-[#22D3EE] accent-[#22D3EE] focus:ring-[#22D3EE]/30"
+								aria-label="Select article {item.title}"
+							/>
+						</div>
+
 						<!-- Thumbnail preview -->
 						<div
 							class="relative h-16 w-20 flex-shrink-0 overflow-hidden rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#0A0E17] sm:h-20 sm:w-28"
@@ -699,6 +832,178 @@
 	{/if}
 </section>
 
+<!-- Floating Bulk Actions Bar -->
+{#if selectedIds.length > 0}
+	<div
+		class="animate-slide-up fixed bottom-6 left-1/2 z-40 flex max-w-[95vw] -translate-x-1/2 items-center gap-2 overflow-x-auto rounded-2xl border border-[#22D3EE]/40 bg-[#0A0E17]/95 px-4 py-3 font-mono text-xs shadow-2xl ring-1 ring-[#22D3EE]/20 backdrop-blur-md sm:gap-4"
+	>
+		<div
+			class="flex items-center gap-2 border-r border-[rgba(255,255,255,0.12)] pr-2 whitespace-nowrap"
+		>
+			<span
+				class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#22D3EE] text-[10px] font-bold text-[#0A0E17]"
+			>
+				{selectedIds.length}
+			</span>
+			<span class="hidden font-bold text-slate-300 sm:inline">Selected</span>
+		</div>
+
+		<div class="flex items-center gap-2">
+			<button
+				onclick={() => openBulkConfirm('publish')}
+				disabled={isBulkLoading}
+				class="flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#22D3EE] px-3 py-1.5 font-bold whitespace-nowrap text-[#0A0E17] transition-all hover:bg-[#22D3EE]/90 disabled:opacity-50"
+			>
+				<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2.5"
+						d="M5 13l4 4L19 7"
+					/>
+				</svg>
+				Publish ({selectedIds.length})
+			</button>
+
+			<button
+				onclick={() => openBulkConfirm('reject')}
+				disabled={isBulkLoading}
+				class="flex cursor-pointer items-center gap-1.5 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 font-bold whitespace-nowrap text-amber-400 transition-all hover:bg-amber-500/20 disabled:opacity-50"
+			>
+				<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+					/>
+				</svg>
+				Reject ({selectedIds.length})
+			</button>
+
+			<button
+				onclick={() => openBulkConfirm('delete')}
+				disabled={isBulkLoading}
+				class="flex cursor-pointer items-center gap-1.5 rounded-lg border border-rose-500/50 bg-rose-500/10 px-3 py-1.5 font-bold whitespace-nowrap text-rose-400 transition-all hover:bg-rose-500/20 disabled:opacity-50"
+			>
+				<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+					/>
+				</svg>
+				Delete ({selectedIds.length})
+			</button>
+
+			<button
+				onclick={clearSelection}
+				class="cursor-pointer rounded-lg px-2 py-1.5 text-xs text-slate-400 transition-colors hover:text-white"
+				title="Deselect all"
+			>
+				✕
+			</button>
+		</div>
+	</div>
+{/if}
+
+<!-- Bulk Action Confirmation Modal -->
+{#if bulkModal.open}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 font-mono text-xs backdrop-blur-sm"
+	>
+		<div
+			class="w-full max-w-md space-y-5 rounded-2xl border bg-[#0F172A] p-6 shadow-2xl"
+			style="border-color: {bulkModal.action === 'publish'
+				? 'rgba(34, 211, 238, 0.4)'
+				: bulkModal.action === 'reject'
+					? 'rgba(251, 191, 36, 0.4)'
+					: 'rgba(244, 63, 94, 0.4)'};"
+		>
+			<div class="flex items-center gap-3">
+				<div
+					class="flex h-9 w-9 items-center justify-center rounded-xl font-bold"
+					style="background: {bulkModal.action === 'publish'
+						? 'rgba(34, 211, 238, 0.15)'
+						: bulkModal.action === 'reject'
+							? 'rgba(251, 191, 36, 0.15)'
+							: 'rgba(244, 63, 94, 0.15)'}; color: {bulkModal.action === 'publish'
+						? '#22D3EE'
+						: bulkModal.action === 'reject'
+							? '#FBBF24'
+							: '#F43F5E'};"
+				>
+					{#if bulkModal.action === 'publish'}
+						✓
+					{:else if bulkModal.action === 'reject'}
+						⚠
+					{:else}
+						🗑
+					{/if}
+				</div>
+				<div>
+					<h3 class="text-sm font-bold tracking-wider text-white uppercase">
+						Confirm Bulk {bulkModal.action}
+					</h3>
+					<span class="text-[11px] text-slate-400">
+						Target: <strong class="text-slate-200">{selectedIds.length} draft article(s)</strong>
+					</span>
+				</div>
+			</div>
+
+			<p class="font-sans text-xs leading-relaxed text-slate-300">
+				{#if bulkModal.action === 'publish'}
+					Are you sure you want to publish <strong class="text-[#22D3EE]"
+						>{selectedIds.length}</strong
+					>
+					selected draft articles to the live public feed?
+				{:else if bulkModal.action === 'reject'}
+					Are you sure you want to reject <strong class="text-amber-400"
+						>{selectedIds.length}</strong
+					>
+					selected draft articles and move them to the Rejected archive?
+				{:else}
+					<span class="font-semibold text-rose-400">WARNING:</span> Are you sure you want to
+					permanently delete <strong class="text-rose-400">{selectedIds.length}</strong> selected draft
+					articles? This action cannot be undone.
+				{/if}
+			</p>
+
+			<div class="flex items-center justify-end gap-3 pt-2">
+				<button
+					type="button"
+					onclick={closeBulkConfirm}
+					disabled={isBulkLoading}
+					class="cursor-pointer rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-2 text-slate-300 transition-colors hover:bg-slate-700 hover:text-white disabled:opacity-50"
+				>
+					Cancel
+				</button>
+				<button
+					type="button"
+					onclick={executeBulkAction}
+					disabled={isBulkLoading}
+					class="flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 font-bold text-white transition-all disabled:opacity-50"
+					style="background: {bulkModal.action === 'publish'
+						? '#0891B2'
+						: bulkModal.action === 'reject'
+							? '#D97706'
+							: '#E11D48'};"
+				>
+					{#if isBulkLoading}
+						<div
+							class="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white"
+						></div>
+						Processing...
+					{:else}
+						Confirm {bulkModal.action?.toUpperCase()}
+					{/if}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
 <style>
 	@keyframes slide-in {
 		from {
@@ -712,5 +1017,19 @@
 	}
 	.animate-slide-in {
 		animation: slide-in 0.3s ease-out;
+	}
+
+	@keyframes slide-up {
+		from {
+			opacity: 0;
+			transform: translate(-50%, 20px);
+		}
+		to {
+			opacity: 1;
+			transform: translate(-50%, 0);
+		}
+	}
+	.animate-slide-up {
+		animation: slide-up 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 	}
 </style>

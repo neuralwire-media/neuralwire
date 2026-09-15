@@ -232,6 +232,7 @@ func (s *Server) Handler() http.Handler {
 	admin.HandleFunc("PUT /api/admin/news/{id}", s.handleUpdateNews)
 	admin.HandleFunc("POST /api/admin/news/{id}/publish", s.handlePublishNews)
 	admin.HandleFunc("POST /api/admin/news/{id}/reject", s.handleRejectNews)
+	admin.HandleFunc("POST /api/admin/news/bulk", s.handleBulkNewsAction)
 	admin.HandleFunc("DELETE /api/admin/news/{id}", s.handleDeleteNews)
 	admin.HandleFunc("DELETE /api/admin/news", s.handleDeleteNewsByStatus)
 	mux.Handle("POST /api/admin/fetch", s.requireAuth(s.csrfProtect(http.HandlerFunc(s.handleFetchNews))))
