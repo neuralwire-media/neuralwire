@@ -31,12 +31,12 @@
 				dateModified: article.published_at || article.created_at,
 				author: {
 					'@type': 'Organization',
-					name: 'Neuralwire',
+					name: 'NeuralWire',
 					url: getSiteUrl()
 				},
 				publisher: {
 					'@type': 'Organization',
-					name: 'Neuralwire',
+					name: 'NeuralWire',
 					url: getSiteUrl(),
 					logo: {
 						'@type': 'ImageObject',
@@ -242,7 +242,7 @@
 </script>
 
 <svelte:head>
-	<title>{article.title} | Neuralwire</title>
+	<title>{article.title} | NeuralWire</title>
 	<meta name="description" content={article.summary} />
 	<meta name="robots" content="index, follow" />
 	<link rel="canonical" href="{getSiteUrl()}/{article.slug}" />

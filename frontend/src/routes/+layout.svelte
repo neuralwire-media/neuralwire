@@ -12,24 +12,14 @@
 	// literally in this file (Svelte's parser would otherwise treat it as a
 	// second top-level tag). `</` is escaped so a value containing the
 	// closing tag sequence cannot break out of the tag.
-	const websiteJsonLdHtml =
-		'<scr' +
-		'ipt type="application/ld+json">' +
-		JSON.stringify({
-			'@context': 'https://schema.org',
-			'@type': 'WebSite',
-			name: 'Neuralwire',
-			url: getSiteUrl()
-		}).replace(/</g, '\\u003c') +
-		'</scr' +
-		'ipt>';
 	const organizationJsonLdHtml =
 		'<scr' +
 		'ipt type="application/ld+json">' +
 		JSON.stringify({
 			'@context': 'https://schema.org',
 			'@type': 'Organization',
-			name: 'Neuralwire',
+			name: 'NeuralWire',
+			alternateName: ['Neuralwire', 'NeuralWire Media'],
 			url: getSiteUrl(),
 			logo: {
 				'@type': 'ImageObject',
@@ -66,13 +56,12 @@
 
 <svelte:head>
 	<!-- Primary SEO Meta Tags (page-level heads override with page-specific tags) -->
-	<title>Neuralwire | AI News, Neural Networks & Future Computation</title>
+	<title>NeuralWire | AI News, Neural Networks & Future Computation</title>
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 	<meta name="robots" content="index, follow" />
-	<meta property="og:site_name" content="Neuralwire" />
+	<meta property="og:site_name" content="NeuralWire" />
 	<meta name="twitter:card" content="summary_large_image" />
-	<!-- Structured data: WebSite + Organization -->
-	{@html websiteJsonLdHtml}
+	<!-- Structured data: Organization (WebSite schema is in app.html) -->
 	{@html organizationJsonLdHtml}
 </svelte:head>
 

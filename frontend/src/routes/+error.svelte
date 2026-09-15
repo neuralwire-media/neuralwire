@@ -3,7 +3,7 @@
 </script>
 
 <svelte:head>
-	<title>{$page.status || 404} — Not Found | Neuralwire</title>
+	<title>{$page.status || 404} — Not Found | NeuralWire</title>
 	<meta name="robots" content="noindex, nofollow" />
 </svelte:head>
 
