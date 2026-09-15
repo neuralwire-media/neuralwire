@@ -46,9 +46,11 @@ Before proposing a commit or Pull Request, the agent/developer MUST execute live
    - Start the Go backend server (and frontend preview if applicable) on localhost with a test configuration.
 2. **Execute Real End-to-End Tests**:
    - Test all user scenarios, modified endpoints, and feature flows against the running localhost server via real HTTP requests (`curl` or API client).
-   - Validate live HTTP status codes (200 OK), response payloads, database state changes, and server logs.
-3. **Confirm Zero Runtime Defects & Graceful Cleanup**:
-   - Verify that the running server produces 0 panics, 0 unhandled runtime errors, and 0 unexpected 5xx responses during the entire E2E test run.
+   - Validate live HTTP status codes (200 OK / 201 Created / 204 No Content for success paths; explicit validated status codes for negative test cases), response payloads, database state changes, and server logs.
+3. **Confirm Zero Runtime Defects & Full HTTP Health**:
+   - Verify that the running server produces 0 panics, 0 unhandled runtime errors, 0 unhandled route misses (unexpected 404), 0 unintended authorization failures (unexpected 401/403), 0 payload/validation errors (unexpected 400/422), and 0 server/gateway errors (500/502/503/504) during the entire E2E test run.
+   - For error simulation or negative flows, strictly verify that the returned HTTP status code and error schema match expected specifications.
+4. **Graceful Cleanup**:
    - Gracefully terminate the test server process after verification completes.
 
 ### 1.4 Truthfulness & Real Execution Invariant
