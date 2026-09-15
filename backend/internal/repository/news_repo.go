@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"neuralwire/backend/internal/clustering"
 	"neuralwire/backend/internal/models"
 	"neuralwire/backend/internal/scoring"
 	"neuralwire/backend/internal/slug"
@@ -37,7 +38,7 @@ func (r *NewsRepository) DB() *sql.DB {
 const newsColumns = `id, title, slug, url, source, category, summary,
 	content, image_url, status, published_at, created_at,
 	value_score, value_breakdown, value_confidence, value_recommendation,
-	value_reason, value_label, value_method`
+	value_reason, value_label, value_method, cluster_id, is_primary`
 
 // Create inserts a draft article and returns its ID. The slug is derived
 // from the title and made unique in the database.
@@ -47,15 +48,21 @@ func (r *NewsRepository) Create(n models.News) (int64, error) {
 		return 0, fmt.Errorf("unique slug: %w", err)
 	}
 
+	isPrim := 1
+	if !n.IsPrimary && n.ClusterID != "" {
+		isPrim = 0
+	}
+
 	res, err := r.db.Exec(`
 		INSERT INTO news (title, slug, url, source, category, summary, content, image_url, status,
 			value_score, value_breakdown, value_confidence, value_recommendation,
-			value_reason, value_label, value_method)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			value_reason, value_label, value_method, cluster_id, is_primary)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		n.Title, uniqueSlug, n.URL, n.Source, n.Category,
 		n.Summary, n.Content, n.ImageURL, string(models.StatusDraft),
 		n.ValueScore, n.ValueBreakdown, n.ValueConfidence, n.ValueRecommendation,
 		n.ValueReason, n.ValueLabel, n.ValueMethod,
+		n.ClusterID, isPrim,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("insert news: %w", err)
@@ -70,13 +77,23 @@ func (r *NewsRepository) Create(n models.News) (int64, error) {
 // GetByID returns an article by primary key.
 func (r *NewsRepository) GetByID(id int64) (*models.News, error) {
 	row := r.db.QueryRow(`SELECT `+newsColumns+` FROM news WHERE id = ?`, id)
-	return scanNews(row)
+	n, err := scanNews(row)
+	if err != nil || n == nil {
+		return n, err
+	}
+	_ = r.AttachClusterCoverage(n)
+	return n, nil
 }
 
 // GetBySlug returns an article by slug.
 func (r *NewsRepository) GetBySlug(slug string) (*models.News, error) {
 	row := r.db.QueryRow(`SELECT `+newsColumns+` FROM news WHERE slug = ?`, slug)
-	return scanNews(row)
+	n, err := scanNews(row)
+	if err != nil || n == nil {
+		return n, err
+	}
+	_ = r.AttachClusterCoverage(n)
+	return n, nil
 }
 
 // ExistsByURL reports whether an article with the given URL already exists.
@@ -152,6 +169,7 @@ func (r *NewsRepository) ListPublished(category, query string, page, pageSize in
 	if err := rows.Err(); err != nil {
 		return nil, 0, fmt.Errorf("iterate news: %w", err)
 	}
+	r.attachClusterCounts(news, string(models.StatusPublished))
 	return news, total, nil
 }
 
@@ -204,6 +222,7 @@ func (r *NewsRepository) ListAdmin(status, category, valueLabel string, page, pa
 	if err := rows.Err(); err != nil {
 		return nil, 0, fmt.Errorf("iterate admin news: %w", err)
 	}
+	r.attachClusterCounts(news, "")
 	return news, total, nil
 }
 
@@ -472,6 +491,7 @@ func (r *NewsRepository) ListTrending(window TrendingWindow, limit int) ([]model
 			n.content, n.image_url, n.status, n.published_at, n.created_at,
 			n.value_score, n.value_breakdown, n.value_confidence, n.value_recommendation,
 			n.value_reason, n.value_label, n.value_method,
+			n.cluster_id, n.is_primary,
 			COUNT(av.id) AS view_count
 		FROM news n
 		JOIN article_views av ON av.news_id = n.id
@@ -494,15 +514,18 @@ func (r *NewsRepository) ListTrending(window TrendingWindow, limit int) ([]model
 		var status string
 		var publishedAt sql.NullString
 		var createdAt string
+		var isPrimary int
 		if err := rows.Scan(
 			&n.ID, &n.Title, &n.Slug, &n.URL, &n.Source, &n.Category,
 			&n.Summary, &n.Content, &n.ImageURL, &status, &publishedAt, &createdAt,
 			&n.ValueScore, &n.ValueBreakdown, &n.ValueConfidence, &n.ValueRecommendation,
 			&n.ValueReason, &n.ValueLabel, &n.ValueMethod,
+			&n.ClusterID, &isPrimary,
 			&n.ViewCount,
 		); err != nil {
 			return nil, fmt.Errorf("scan trending: %w", err)
 		}
+		n.IsPrimary = isPrimary == 1
 		n.Status = models.NewsStatus(status)
 		if publishedAt.Valid {
 			if t, err := parseSQLiteTime(publishedAt.String); err == nil {
@@ -517,6 +540,7 @@ func (r *NewsRepository) ListTrending(window TrendingWindow, limit int) ([]model
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate trending: %w", err)
 	}
+	r.attachClusterCounts(news, string(models.StatusPublished))
 	return news, nil
 }
 
@@ -632,18 +656,22 @@ func scanNews(s scanner) (*models.News, error) {
 	var status string
 	var publishedAt sql.NullString
 	var createdAt string
+	var isPrimary int
 
 	if err := s.Scan(
 		&n.ID, &n.Title, &n.Slug, &n.URL, &n.Source, &n.Category,
 		&n.Summary, &n.Content, &n.ImageURL, &status, &publishedAt, &createdAt,
 		&n.ValueScore, &n.ValueBreakdown, &n.ValueConfidence, &n.ValueRecommendation,
 		&n.ValueReason, &n.ValueLabel, &n.ValueMethod,
+		&n.ClusterID, &isPrimary,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("scan news: %w", err)
 	}
+
+	n.IsPrimary = isPrimary == 1
 
 	n.Status = models.NewsStatus(status)
 	if publishedAt.Valid {
@@ -789,4 +817,189 @@ func (r *NewsRepository) GetAnalytics(topLimit int) (*AnalyticsData, error) {
 	}
 
 	return data, nil
+}
+
+// FindRecentCandidates retrieves recent articles for cluster similarity matching.
+func (r *NewsRepository) FindRecentCandidates(ctx context.Context, since time.Time) ([]clustering.CandidateNews, error) {
+	query := `SELECT id, cluster_id, title, summary, created_at FROM news WHERE created_at >= ? ORDER BY created_at DESC`
+	rows, err := r.db.QueryContext(ctx, query, since.UTC().Format("2006-01-02 15:04:05"))
+	if err != nil {
+		return nil, fmt.Errorf("find recent candidates: %w", err)
+	}
+	defer rows.Close()
+
+	var candidates []clustering.CandidateNews
+	for rows.Next() {
+		var c clustering.CandidateNews
+		var createdAt string
+		if err := rows.Scan(&c.ID, &c.ClusterID, &c.Title, &c.Summary, &createdAt); err != nil {
+			return nil, fmt.Errorf("scan candidate: %w", err)
+		}
+		if t, err := parseSQLiteTime(createdAt); err == nil {
+			c.CreatedAt = t
+		}
+		candidates = append(candidates, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate candidates: %w", err)
+	}
+	return candidates, nil
+}
+
+// GetClusterMembers returns all news articles belonging to the same cluster.
+func (r *NewsRepository) GetClusterMembers(clusterID string) ([]models.News, error) {
+	if clusterID == "" {
+		return nil, nil
+	}
+	query := `SELECT ` + newsColumns + ` FROM news WHERE cluster_id = ? ORDER BY is_primary DESC, published_at DESC, created_at DESC`
+	rows, err := r.db.Query(query, clusterID)
+	if err != nil {
+		return nil, fmt.Errorf("get cluster members: %w", err)
+	}
+	defer rows.Close()
+
+	var members []models.News
+	for rows.Next() {
+		n, err := scanNews(rows)
+		if err != nil {
+			return nil, err
+		}
+		if n != nil {
+			members = append(members, *n)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate cluster members: %w", err)
+	}
+	return members, nil
+}
+
+// AttachClusterCoverage attaches other published articles in the same cluster to n.
+func (r *NewsRepository) AttachClusterCoverage(n *models.News) error {
+	if n == nil || n.ClusterID == "" {
+		return nil
+	}
+	query := `SELECT ` + newsColumns + ` FROM news WHERE cluster_id = ? AND id != ? AND status = ? ORDER BY is_primary DESC, published_at DESC, created_at DESC`
+	rows, err := r.db.Query(query, n.ClusterID, n.ID, string(models.StatusPublished))
+	if err != nil {
+		return fmt.Errorf("attach cluster coverage: %w", err)
+	}
+	defer rows.Close()
+
+	var coverage []models.News
+	for rows.Next() {
+		member, err := scanNews(rows)
+		if err != nil {
+			return err
+		}
+		if member != nil {
+			coverage = append(coverage, *member)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate cluster coverage: %w", err)
+	}
+	n.ClusterCoverage = coverage
+	n.ClusterCount = len(coverage)
+	return nil
+}
+
+// SetPrimaryInCluster designates the specified article as the primary story for its cluster.
+func (r *NewsRepository) SetPrimaryInCluster(newsID int64, clusterID string) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if clusterID == "" {
+		var foundCluster string
+		err := tx.QueryRow(`SELECT cluster_id FROM news WHERE id = ?`, newsID).Scan(&foundCluster)
+		if err != nil {
+			return fmt.Errorf("find news cluster: %w", err)
+		}
+		clusterID = foundCluster
+	}
+
+	if clusterID == "" {
+		return fmt.Errorf("article has no cluster_id")
+	}
+
+	// Unset primary for all in cluster
+	if _, err := tx.Exec(`UPDATE news SET is_primary = 0 WHERE cluster_id = ?`, clusterID); err != nil {
+		return fmt.Errorf("unset primary in cluster: %w", err)
+	}
+
+	// Set primary for target news
+	res, err := tx.Exec(`UPDATE news SET is_primary = 1 WHERE id = ?`, newsID)
+	if err != nil {
+		return fmt.Errorf("set primary: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("news not found")
+	}
+
+	return tx.Commit()
+}
+
+func (r *NewsRepository) attachClusterCounts(news []models.News, statusFilter string) {
+	if len(news) == 0 {
+		return
+	}
+	clusterMap := make(map[string]int)
+	var clusterIDs []string
+	for _, n := range news {
+		if n.ClusterID != "" {
+			if _, exists := clusterMap[n.ClusterID]; !exists {
+				clusterMap[n.ClusterID] = 0
+				clusterIDs = append(clusterIDs, n.ClusterID)
+			}
+		}
+	}
+	if len(clusterIDs) == 0 {
+		return
+	}
+
+	placeholders := make([]string, len(clusterIDs))
+	args := make([]any, 0, len(clusterIDs)+1)
+	for i, cid := range clusterIDs {
+		placeholders[i] = "?"
+		args = append(args, cid)
+	}
+
+	query := `SELECT cluster_id, COUNT(*) FROM news WHERE cluster_id IN (` + strings.Join(placeholders, ",") + `)`
+	if statusFilter != "" {
+		query += ` AND status = ?`
+		args = append(args, statusFilter)
+	}
+	query += ` GROUP BY cluster_id`
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid string
+		var count int
+		if err := rows.Scan(&cid, &count); err == nil {
+			clusterMap[cid] = count
+		}
+	}
+
+	for i := range news {
+		if news[i].ClusterID != "" {
+			total := clusterMap[news[i].ClusterID]
+			if total > 1 {
+				news[i].ClusterCount = total - 1
+			} else {
+				news[i].ClusterCount = 0
+			}
+		}
+	}
 }

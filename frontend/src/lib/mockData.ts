@@ -21,6 +21,11 @@ export interface News {
 	value_reason?: string;
 	value_label?: 'HIGH' | 'MEDIUM' | 'LOW' | '';
 	value_method?: string;
+	// Clustering fields
+	cluster_id?: string;
+	is_primary?: boolean;
+	cluster_count?: number;
+	cluster_coverage?: News[];
 }
 
 export interface ScoreThresholds {

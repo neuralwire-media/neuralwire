@@ -335,6 +335,31 @@
 		}
 	}
 
+	async function handleSetPrimary(id: number) {
+		const token = localStorage.getItem('admin_token');
+		if (!token) return;
+
+		try {
+			const res = await fetch(`${BASE_URL}/admin/news/${id}/set-primary`, {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${token}`
+				}
+			});
+
+			if (res.ok) {
+				showToast('success', 'Article designated as primary for its cluster.');
+				await fetchDrafts(currentPage);
+			} else {
+				const data = await res.json().catch(() => ({}));
+				showToast('error', data.error || 'Failed to set article as primary.');
+			}
+		} catch (err) {
+			console.error('Set primary error:', err);
+			showToast('error', 'Network error setting article as primary.');
+		}
+	}
+
 	async function handleDeleteAll() {
 		const token = localStorage.getItem('admin_token');
 		if (!token) return;
@@ -696,6 +721,27 @@
 								<span>{item.source.toUpperCase()}</span>
 								<span>•</span>
 								<span>{formatDate(item.created_at)}</span>
+								{#if item.cluster_id}
+									<span>•</span>
+									{#if item.is_primary}
+										<span
+											class="rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 font-bold text-emerald-400"
+											title="Primary article for cluster {item.cluster_id}"
+										>
+											UTAMA
+										</span>
+									{:else}
+										<span
+											class="rounded border border-purple-500/40 bg-purple-500/10 px-1.5 py-0.5 font-bold text-purple-400"
+											title="Cluster: {item.cluster_id}"
+										>
+											TERKAIT
+										</span>
+									{/if}
+									{#if item.cluster_count && item.cluster_count > 0}
+										<span class="text-purple-400">+{item.cluster_count} sumber</span>
+									{/if}
+								{/if}
 							</div>
 
 							<!-- Value score badge + sub-scores -->
@@ -780,6 +826,15 @@
 								>
 									Preview
 								</a>
+								{#if item.cluster_id && !item.is_primary}
+									<button
+										onclick={() => handleSetPrimary(item.id)}
+										class="flex-1 cursor-pointer rounded border border-purple-500/50 bg-purple-950/20 px-2.5 py-1.5 font-mono text-[10px] text-purple-300 transition-all hover:bg-purple-500 hover:text-[#0A0E17] md:w-full"
+										title="Designate this article as primary in its story cluster"
+									>
+										Set Primary
+									</button>
+								{/if}
 								<button
 									onclick={() => handlePublish(item.id)}
 									class="flex-1 cursor-pointer rounded border border-cyan-500 bg-cyan-950/20 px-2.5 py-1.5 font-mono text-[10px] text-[#22D3EE] transition-all hover:bg-cyan-500 hover:text-[#0A0E17] md:w-full"

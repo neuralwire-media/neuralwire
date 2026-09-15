@@ -361,6 +361,76 @@
 				</div>
 			{/if}
 
+			<!-- Multi-Source Coverage Card (Clustered Articles from Other Sources) -->
+			{#if article.cluster_coverage && article.cluster_coverage.length > 0}
+				<div
+					class="relative my-10 overflow-hidden rounded-2xl border border-purple-500/20 bg-[#0F172A]/40 p-6 backdrop-blur-sm md:p-8"
+				>
+					<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+						<div class="flex items-center gap-2.5">
+							<div
+								class="flex h-7 w-7 items-center justify-center rounded-lg border border-purple-500/30 bg-purple-500/10 text-purple-400"
+							>
+								<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+									/>
+								</svg>
+							</div>
+							<div>
+								<h3 class="font-mono text-xs font-bold tracking-widest text-purple-300 uppercase">
+									Multi-Source Coverage
+								</h3>
+								<p class="font-sans text-[11px] text-slate-400">
+									Liputan peristiwa serupa dari {article.cluster_coverage.length} perspektif media lainnya
+								</p>
+							</div>
+						</div>
+						<span
+							class="rounded-full border border-purple-500/30 bg-purple-500/10 px-2.5 py-0.5 font-mono text-[10px] font-bold text-purple-300"
+						>
+							+{article.cluster_coverage.length} Sumber Lain
+						</span>
+					</div>
+
+					<div class="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2">
+						{#each article.cluster_coverage as coverage}
+							<a
+								href="/{coverage.slug}"
+								class="group flex flex-col justify-between rounded-xl border border-[rgba(255,255,255,0.06)] bg-[#070A10]/60 p-4 transition-all duration-200 hover:border-purple-500/40 hover:bg-[#070A10]"
+							>
+								<div>
+									<div
+										class="mb-2 flex items-center justify-between font-mono text-[10px] text-slate-500"
+									>
+										<span class="font-bold text-purple-400">{coverage.source.toUpperCase()}</span>
+										<span>{formatDate(coverage.published_at || coverage.created_at)}</span>
+									</div>
+									<h4
+										class="line-clamp-2 font-serif text-sm font-medium text-slate-200 transition-colors group-hover:text-purple-300"
+									>
+										{coverage.title}
+									</h4>
+									{#if coverage.summary}
+										<p class="mt-2 line-clamp-2 font-sans text-xs text-slate-400">
+											{coverage.summary}
+										</p>
+									{/if}
+								</div>
+								<div
+									class="mt-3 flex items-center justify-end font-mono text-[10px] text-purple-400/80 group-hover:text-purple-300"
+								>
+									<span>BACA PERSPEKTIF INI &rarr;</span>
+								</div>
+							</a>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
 			<!-- External Source CTA Card -->
 			<div
 				class="relative my-12 overflow-hidden rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0F172A]/40 p-6 text-center backdrop-blur-sm md:p-8"

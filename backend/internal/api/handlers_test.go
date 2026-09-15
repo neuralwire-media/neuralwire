@@ -2009,3 +2009,91 @@ func TestEnhancedSecurityHeaders(t *testing.T) {
 		}
 	}
 }
+
+func TestClusterAPIEndpoints(t *testing.T) {
+	s := newTestServer(t)
+	token := adminToken(t, s)
+
+	clusterID := "cluster-api-test"
+
+	// Create 2 articles in the same cluster
+	id1, err := s.newsRepo.Create(models.News{
+		Title:     "Anthropic launches Claude 3.7 Sonnet hybrid reasoning",
+		URL:       "https://techcrunch.com/claude-3-7",
+		Source:    "TechCrunch",
+		Category:  "ai",
+		Summary:   "Anthropic introduces Claude 3.7 Sonnet with hybrid reasoning architecture.",
+		ClusterID: clusterID,
+		IsPrimary: true,
+	})
+	if err != nil {
+		t.Fatalf("create news 1: %v", err)
+	}
+
+	id2, err := s.newsRepo.Create(models.News{
+		Title:     "Anthropic releases Claude 3.7 with hybrid reasoning model",
+		URL:       "https://theverge.com/claude-3-7-released",
+		Source:    "The Verge",
+		Category:  "ai",
+		Summary:   "The Verge details Anthropic Claude 3.7 with hybrid reasoning capabilities.",
+		ClusterID: clusterID,
+		IsPrimary: false,
+	})
+	if err != nil {
+		t.Fatalf("create news 2: %v", err)
+	}
+
+	// Publish both
+	_ = s.newsRepo.SetStatus(id1, models.StatusPublished)
+	_ = s.newsRepo.SetStatus(id2, models.StatusPublished)
+
+	// 1. GET /api/news/{id} should return cluster_coverage containing other article
+	rec := doJSON(t, s, http.MethodGet, fmt.Sprintf("/api/news/%d", id1), nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get news code = %d, want 200", rec.Code)
+	}
+	var n1 models.News
+	if err := json.Unmarshal(rec.Body.Bytes(), &n1); err != nil {
+		t.Fatalf("decode news 1: %v", err)
+	}
+	if n1.ClusterCount != 1 {
+		t.Errorf("cluster count = %d, want 1", n1.ClusterCount)
+	}
+	if len(n1.ClusterCoverage) != 1 || n1.ClusterCoverage[0].ID != id2 {
+		t.Errorf("unexpected cluster coverage: %+v", n1.ClusterCoverage)
+	}
+
+	// 2. GET /api/news should return cluster_count = 1 for both
+	recList := doJSON(t, s, http.MethodGet, "/api/news", nil)
+	if recList.Code != http.StatusOK {
+		t.Fatalf("list news code = %d, want 200", recList.Code)
+	}
+	var resp paginatedResponse
+	if err := json.Unmarshal(recList.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode news list: %v", err)
+	}
+	for _, item := range resp.Data {
+		if item.ClusterID == clusterID && item.ClusterCount != 1 {
+			t.Errorf("item %d cluster count = %d, want 1", item.ID, item.ClusterCount)
+		}
+	}
+
+	// 3. POST /api/admin/news/{id}/set-primary to promote id2
+	recPromote := doJSONAs(t, s, http.MethodPost, fmt.Sprintf("/api/admin/news/%d/set-primary", id2), nil, token)
+	if recPromote.Code != http.StatusOK {
+		t.Fatalf("set-primary code = %d, want 200 (body: %s)", recPromote.Code, recPromote.Body.String())
+	}
+	var promoted models.News
+	if err := json.Unmarshal(recPromote.Body.Bytes(), &promoted); err != nil {
+		t.Fatalf("decode promoted: %v", err)
+	}
+	if !promoted.IsPrimary {
+		t.Errorf("promoted article is_primary = false, want true")
+	}
+
+	// Verify id1 is now non-primary
+	n1After, _ := s.newsRepo.GetByID(id1)
+	if n1After.IsPrimary {
+		t.Errorf("id1 is_primary = true after promotion, want false")
+	}
+}
