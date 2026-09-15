@@ -194,6 +194,10 @@ func (s *Server) rateLimit(next http.Handler) http.Handler {
 //   - X-Content-Type-Options: nosniff — prevents MIME sniffing
 //   - X-Frame-Options: DENY — prevents clickjacking
 //   - Referrer-Policy: strict-origin-when-cross-origin — limits referrer leaks
+//   - Cross-Origin-Opener-Policy: same-origin — isolates browsing context (COOP)
+//   - Cross-Origin-Resource-Policy: same-origin — restricts cross-origin resource loading (CORP)
+//   - X-XSS-Protection: 0 — disables legacy buggy browser XSS auditor
+//   - Strict-Transport-Security: max-age=31536000; includeSubDomains — enforces HTTPS (HSTS)
 //   - Permissions-Policy — disables unused browser features
 //   - Content-Security-Policy — restricts script/style/image sources (anti-XSS)
 //
@@ -211,6 +215,10 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		h.Set("Cross-Origin-Opener-Policy", "same-origin")
+		h.Set("Cross-Origin-Resource-Policy", "same-origin")
+		h.Set("X-XSS-Protection", "0")
+		h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 		h.Set("Content-Security-Policy",
 			"default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; "+

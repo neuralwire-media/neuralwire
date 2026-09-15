@@ -23,6 +23,7 @@ import (
 	"neuralwire/backend/internal/fetcher"
 	"neuralwire/backend/internal/metrics"
 	"neuralwire/backend/internal/models"
+	"neuralwire/backend/internal/netutil"
 	"neuralwire/backend/internal/repository"
 	"neuralwire/backend/internal/scheduler"
 	"neuralwire/backend/internal/scoring"
@@ -61,14 +62,13 @@ func main() {
 	settingsRepo := repository.NewSettingsRepository(db)
 
 	// Production hardening: refuse to boot with insecure defaults so a
-	// misconfigured deploy never goes live with admin/admin123 or a dev secret.
-	devSecret := "neuralwire-dev-secret-7f3c9a1e4b8d2f6a"
+	// misconfigured deploy never goes live with admin/admin123 or a weak/dev secret.
 	if cfg.AppEnv == "production" {
 		if cfg.AdminUsername == "admin" && cfg.AdminPassword == "admin123" {
 			logger.Fatalf("config: refusing to start in production with default admin credentials. Set ADMIN_USERNAME/ADMIN_PASSWORD.")
 		}
-		if cfg.AdminTokenSecret == "" || cfg.AdminTokenSecret == devSecret {
-			logger.Fatalf("config: refusing to start in production with the development ADMIN_TOKEN_SECRET. Set a strong secret.")
+		if err := auth.ValidateSecretStrength(cfg.AdminTokenSecret); err != nil {
+			logger.Fatalf("config: %v. Set a strong ADMIN_TOKEN_SECRET (at least %d characters).", err, auth.MinSecretLength)
 		}
 	} else if cfg.AdminUsername == "admin" && cfg.AdminPassword == "admin123" {
 		logger.Printf("WARNING: using default admin credentials. Set ADMIN_USERNAME/ADMIN_PASSWORD before deployment.")
@@ -123,7 +123,7 @@ func main() {
 		MaxInsertPerSource: cfg.ScrapeMaxInsertPerSource,
 		Scorer:             scoreService,
 		UserAgent:          cfg.UserAgent,
-		HTTPClient:         &http.Client{Timeout: 30 * time.Second},
+		HTTPClient:         netutil.SafeHTTPClient(30 * time.Second),
 		Logger:             slogLogger,
 	})
 

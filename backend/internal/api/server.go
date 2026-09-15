@@ -24,6 +24,7 @@ import (
 	"neuralwire/backend/internal/fetcher"
 	"neuralwire/backend/internal/metrics"
 	"neuralwire/backend/internal/models"
+	"neuralwire/backend/internal/netutil"
 	"neuralwire/backend/internal/ratelimit"
 	"neuralwire/backend/internal/repository"
 	"neuralwire/backend/internal/scheduler"
@@ -84,6 +85,10 @@ type Server struct {
 	backupDir string
 	// backupRetain is how many backups to keep (0 = no pruning).
 	backupRetain int
+	// probeClient is the safe HTTP client used for feed probing.
+	probeClient *http.Client
+	// skipSSRFCheck allows test suites using mock servers to bypass SSRF validation.
+	skipSSRFCheck bool
 	// startTime records when the server instance booted.
 	startTime time.Time
 }
@@ -142,6 +147,10 @@ type ServerOptions struct {
 	BackupDir string
 	// BackupRetain keeps the newest N backups and prunes the rest.
 	BackupRetain int
+	// ProbeClient overrides the HTTP client used for feed probing (defaults to netutil.SafeHTTPClient).
+	ProbeClient *http.Client
+	// SkipSSRFCheck disables SSRF URL validation for local unit tests with mock servers.
+	SkipSSRFCheck bool
 }
 
 // NewServer builds a Server.
@@ -164,6 +173,10 @@ func NewServer(opts ServerOptions) *Server {
 	if opts.ViewRateWindow <= 0 {
 		opts.ViewRateWindow = time.Minute
 	}
+	probeClient := opts.ProbeClient
+	if probeClient == nil {
+		probeClient = netutil.SafeHTTPClient(15 * time.Second)
+	}
 	srv := &Server{
 		newsRepo:           opts.NewsRepo,
 		categoryRepo:       opts.CategoryRepo,
@@ -184,6 +197,8 @@ func NewServer(opts ServerOptions) *Server {
 		scheduler:          opts.Scheduler,
 		backupDir:          opts.BackupDir,
 		backupRetain:       opts.BackupRetain,
+		probeClient:        probeClient,
+		skipSSRFCheck:      opts.SkipSSRFCheck,
 		startTime:          time.Now(),
 	}
 	if opts.ViewRateLimit > 0 {
