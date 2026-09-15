@@ -1595,3 +1595,104 @@ func TestCacheControlHeaders(t *testing.T) {
 		}
 	}
 }
+
+func TestBulkNewsAction(t *testing.T) {
+	s := newTestServer(t)
+	token := adminToken(t, s)
+
+	// Create 4 test draft news
+	id1, err := s.newsRepo.Create(models.News{Title: "Bulk Article 1", URL: "https://example.com/b1", Source: "src", Category: "ai"})
+	if err != nil {
+		t.Fatalf("create id1: %v", err)
+	}
+	id2, err := s.newsRepo.Create(models.News{Title: "Bulk Article 2", URL: "https://example.com/b2", Source: "src", Category: "ai"})
+	if err != nil {
+		t.Fatalf("create id2: %v", err)
+	}
+	id3, err := s.newsRepo.Create(models.News{Title: "Bulk Article 3", URL: "https://example.com/b3", Source: "src", Category: "ai"})
+	if err != nil {
+		t.Fatalf("create id3: %v", err)
+	}
+	id4, err := s.newsRepo.Create(models.News{Title: "Bulk Article 4", URL: "https://example.com/b4", Source: "src", Category: "ai"})
+	if err != nil {
+		t.Fatalf("create id4: %v", err)
+	}
+
+	// 1. Unauthorized request
+	rec := doJSON(t, s, http.MethodPost, "/api/admin/news/bulk", map[string]any{
+		"action": "publish",
+		"ids":    []int64{id1, id2},
+	})
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("unauthorized bulk action code = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+
+	// 2. Empty IDs
+	rec = doJSONAs(t, s, http.MethodPost, "/api/admin/news/bulk", map[string]any{
+		"action": "publish",
+		"ids":    []int64{},
+	}, token)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("empty ids code = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+
+	// 3. Invalid Action
+	rec = doJSONAs(t, s, http.MethodPost, "/api/admin/news/bulk", map[string]any{
+		"action": "invalid_action",
+		"ids":    []int64{id1},
+	}, token)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("invalid action code = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+
+	// 4. Bulk Publish id1 and id2
+	rec = doJSONAs(t, s, http.MethodPost, "/api/admin/news/bulk", map[string]any{
+		"action": "publish",
+		"ids":    []int64{id1, id2},
+	}, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("bulk publish code = %d, want %d, body: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var bulkResp bulkNewsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &bulkResp); err != nil {
+		t.Fatalf("decode bulk response: %v", err)
+	}
+	if !bulkResp.Success || bulkResp.ProcessedCount != 2 || bulkResp.Action != "publish" {
+		t.Errorf("unexpected bulk response: %+v", bulkResp)
+	}
+
+	n1, _ := s.newsRepo.GetByID(id1)
+	if n1.Status != models.StatusPublished || n1.PublishedAt == nil {
+		t.Errorf("n1 status = %v, want published", n1.Status)
+	}
+	n2, _ := s.newsRepo.GetByID(id2)
+	if n2.Status != models.StatusPublished || n2.PublishedAt == nil {
+		t.Errorf("n2 status = %v, want published", n2.Status)
+	}
+
+	// 5. Bulk Reject id3
+	rec = doJSONAs(t, s, http.MethodPost, "/api/admin/news/bulk", map[string]any{
+		"action": "reject",
+		"ids":    []int64{id3},
+	}, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("bulk reject code = %d, want %d", rec.Code, http.StatusOK)
+	}
+	n3, _ := s.newsRepo.GetByID(id3)
+	if n3.Status != models.StatusRejected {
+		t.Errorf("n3 status = %v, want rejected", n3.Status)
+	}
+
+	// 6. Bulk Delete id4 and id3
+	rec = doJSONAs(t, s, http.MethodPost, "/api/admin/news/bulk", map[string]any{
+		"action": "delete",
+		"ids":    []int64{id3, id4},
+	}, token)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("bulk delete code = %d, want %d", rec.Code, http.StatusOK)
+	}
+	n4, _ := s.newsRepo.GetByID(id4)
+	if n4 != nil {
+		t.Errorf("n4 should be deleted, got %+v", n4)
+	}
+}

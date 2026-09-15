@@ -1008,6 +1008,62 @@ func (s *Server) handleDeleteNewsByStatus(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type bulkNewsRequest struct {
+	Action string  `json:"action"` // "publish", "reject", "delete"
+	IDs    []int64 `json:"ids"`
+}
+
+type bulkNewsResponse struct {
+	Success        bool   `json:"success"`
+	Action         string `json:"action"`
+	ProcessedCount int64  `json:"processed_count"`
+}
+
+func (s *Server) handleBulkNewsAction(w http.ResponseWriter, r *http.Request) {
+	var req bulkNewsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		s.writeError(w, http.StatusBadRequest, "ids list cannot be empty")
+		return
+	}
+	if len(req.IDs) > 1000 {
+		s.writeError(w, http.StatusBadRequest, "maximum 1000 items per bulk request")
+		return
+	}
+
+	var processed int64
+	var err error
+
+	act := strings.ToLower(strings.TrimSpace(req.Action))
+	switch act {
+	case "publish":
+		processed, err = s.newsRepo.BulkSetStatus(req.IDs, models.StatusPublished)
+	case "reject":
+		processed, err = s.newsRepo.BulkSetStatus(req.IDs, models.StatusRejected)
+	case "delete":
+		processed, err = s.newsRepo.BulkDelete(req.IDs)
+	default:
+		s.writeError(w, http.StatusBadRequest, "invalid action; must be publish, reject, or delete")
+		return
+	}
+
+	if err != nil {
+		s.logger.Printf("api: bulk %s news: %v", act, err)
+		s.writeError(w, http.StatusInternalServerError, "failed to process bulk action")
+		return
+	}
+
+	s.writeJSON(w, http.StatusOK, bulkNewsResponse{
+		Success:        true,
+		Action:         act,
+		ProcessedCount: processed,
+	})
+}
+
 // --- helpers --------------------------------------------------------------
 
 func pathID(r *http.Request) (int64, error) {
