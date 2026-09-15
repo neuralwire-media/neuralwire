@@ -111,4 +111,3 @@ func ValidateSecretStrength(secret string) error {
 	}
 	return nil
 }
-

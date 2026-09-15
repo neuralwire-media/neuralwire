@@ -1994,13 +1994,13 @@ func TestEnhancedSecurityHeaders(t *testing.T) {
 	}
 
 	headers := map[string]string{
-		"X-Content-Type-Options":    "nosniff",
-		"X-Frame-Options":           "DENY",
-		"Referrer-Policy":           "strict-origin-when-cross-origin",
-		"Cross-Origin-Opener-Policy": "same-origin",
+		"X-Content-Type-Options":       "nosniff",
+		"X-Frame-Options":              "DENY",
+		"Referrer-Policy":              "strict-origin-when-cross-origin",
+		"Cross-Origin-Opener-Policy":   "same-origin",
 		"Cross-Origin-Resource-Policy": "same-origin",
-		"X-XSS-Protection":          "0",
-		"Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+		"X-XSS-Protection":             "0",
+		"Strict-Transport-Security":    "max-age=31536000; includeSubDomains",
 	}
 
 	for header, want := range headers {
@@ -2009,4 +2009,3 @@ func TestEnhancedSecurityHeaders(t *testing.T) {
 		}
 	}
 }
-
