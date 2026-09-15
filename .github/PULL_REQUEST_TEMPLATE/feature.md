@@ -1,17 +1,13 @@
-## Summary
-<!-- A clear, concise overview of what this PR changes and why. -->
+## Feature Summary
+<!-- Provide a clear, concise overview of the new feature or enhancement. -->
 
-## Type of Change
-- [ ] New feature (`.github/PULL_REQUEST_TEMPLATE/feature.md`)
-- [ ] Bug fix (`.github/PULL_REQUEST_TEMPLATE/bugfix.md`)
-- [ ] Security hardening (`.github/PULL_REQUEST_TEMPLATE/security.md`)
-- [ ] Refactor / chore (`.github/PULL_REQUEST_TEMPLATE/refactor.md`)
-- [ ] Documentation / Rules
+## Architectural & Design Decisions
+<!-- Explain the technical approach, data flow changes, new components, and rationale. -->
 
-## Scope Lock & Guardrails
-- [ ] Changes strictly address the target task without unrelated refactoring or dependency churn.
-- [ ] No compiler, typechecker, or linter errors bypassed (`any`, `@ts-ignore`, `eslint-disable`, empty `catch`).
-- [ ] Pre-existing local modifications and user states are preserved.
+## Scope Lock & Blast Radius
+- [ ] **Strict Scope Boundary**: Changes are strictly confined to the requested feature.
+- [ ] **No Unrelated Churn**: No unrelated files, styles, or dependency upgrades included.
+- [ ] **Backwards Compatibility**: Existing public API contracts and data models remain compatible.
 
 ## Mandatory Zero-Failure Pre-Commit Verification (AGENTS.md)
 *All commands below must be executed locally and pass with Exit Code 0 prior to creating the PR:*
@@ -31,3 +27,6 @@
 ```text
 <!-- Paste local test/build verification output here -->
 ```
+
+## Visual Changes / UI Mockups (if applicable)
+<!-- Attach screenshots, screen recordings, or before/after comparisons if UI changed. -->

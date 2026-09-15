@@ -1,17 +1,13 @@
-## Summary
-<!-- A clear, concise overview of what this PR changes and why. -->
+## Refactor Motivation & Context
+<!-- Describe why this refactoring is needed (e.g. anti-duplication, performance tuning, architectural alignment). -->
 
-## Type of Change
-- [ ] New feature (`.github/PULL_REQUEST_TEMPLATE/feature.md`)
-- [ ] Bug fix (`.github/PULL_REQUEST_TEMPLATE/bugfix.md`)
-- [ ] Security hardening (`.github/PULL_REQUEST_TEMPLATE/security.md`)
-- [ ] Refactor / chore (`.github/PULL_REQUEST_TEMPLATE/refactor.md`)
-- [ ] Documentation / Rules
+## Summary of Code Changes
+<!-- Outline what was reorganized, consolidated, or optimized. -->
 
-## Scope Lock & Guardrails
-- [ ] Changes strictly address the target task without unrelated refactoring or dependency churn.
-- [ ] No compiler, typechecker, or linter errors bypassed (`any`, `@ts-ignore`, `eslint-disable`, empty `catch`).
-- [ ] Pre-existing local modifications and user states are preserved.
+## Scope Lock & Non-Breaking Invariants
+- [ ] **Zero Behavioral Drift**: Public contracts, API endpoints, and response formats are preserved.
+- [ ] **Scope Contained**: No speculative features or unrelated cleanups added.
+- [ ] **No Error Weakening**: Compiler, linter, or type checks were not suppressed or relaxed.
 
 ## Mandatory Zero-Failure Pre-Commit Verification (AGENTS.md)
 *All commands below must be executed locally and pass with Exit Code 0 prior to creating the PR:*
