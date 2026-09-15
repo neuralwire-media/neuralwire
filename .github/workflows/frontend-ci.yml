@@ -8,6 +8,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: frontend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: read
@@ -47,6 +51,10 @@ jobs:
       - name: Install dependencies
         if: steps.filter.outputs.frontend == 'true'
         run: npm ci
+
+      - name: Security audit (npm audit)
+        if: steps.filter.outputs.frontend == 'true'
+        run: npm audit --audit-level=high
 
       - name: Type-check (svelte-check)
         if: steps.filter.outputs.frontend == 'true'
