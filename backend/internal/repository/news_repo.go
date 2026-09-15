@@ -669,3 +669,124 @@ func parseSQLiteTime(s string) (time.Time, error) {
 	}
 	return time.Parse("2006-01-02 15:04:05", s)
 }
+
+// TopArticle holds summary data for an article with its read count.
+type TopArticle struct {
+	ID        int64  `json:"id"`
+	Title     string `json:"title"`
+	Slug      string `json:"slug"`
+	Category  string `json:"category"`
+	ViewCount int64  `json:"view_count"`
+}
+
+// CategoryCount represents total articles per category.
+type CategoryCount struct {
+	Category string `json:"category"`
+	Count    int64  `json:"count"`
+}
+
+// ScoreDistribution represents breakdown of articles across score labels.
+type ScoreDistribution struct {
+	High   int64 `json:"high"`
+	Medium int64 `json:"medium"`
+	Low    int64 `json:"low"`
+}
+
+// AnalyticsData contains aggregated engagement and content metrics.
+type AnalyticsData struct {
+	TotalViews           int64             `json:"total_views"`
+	TopArticles          []TopArticle      `json:"top_articles"`
+	CategoryDistribution []CategoryCount   `json:"category_distribution"`
+	ScoreDistribution    ScoreDistribution `json:"score_distribution"`
+	DraftsCount          int64             `json:"drafts_count"`
+	PublishedCount       int64             `json:"published_count"`
+	RejectedCount        int64             `json:"rejected_count"`
+}
+
+// GetAnalytics computes engagement, category breakdown, and status counts.
+func (r *NewsRepository) GetAnalytics(topLimit int) (*AnalyticsData, error) {
+	if topLimit <= 0 {
+		topLimit = 5
+	}
+	data := &AnalyticsData{
+		TopArticles:          make([]TopArticle, 0),
+		CategoryDistribution: make([]CategoryCount, 0),
+	}
+
+	// 1. Total Views
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM article_views`).Scan(&data.TotalViews)
+
+	// 2. Status counts
+	rows, err := r.db.Query(`SELECT status, COUNT(*) FROM news GROUP BY status`)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var st string
+			var count int64
+			if err := rows.Scan(&st, &count); err == nil {
+				switch models.NewsStatus(st) {
+				case models.StatusDraft:
+					data.DraftsCount = count
+				case models.StatusPublished:
+					data.PublishedCount = count
+				case models.StatusRejected:
+					data.RejectedCount = count
+				}
+			}
+		}
+	}
+
+	// 3. Top viewed articles
+	topQuery := `
+		SELECT n.id, n.title, n.slug, n.category, COUNT(v.id) as views
+		FROM news n
+		JOIN article_views v ON n.id = v.news_id
+		GROUP BY n.id
+		ORDER BY views DESC, n.id DESC
+		LIMIT ?`
+	topRows, err := r.db.Query(topQuery, topLimit)
+	if err == nil {
+		defer topRows.Close()
+		for topRows.Next() {
+			var ta TopArticle
+			if err := topRows.Scan(&ta.ID, &ta.Title, &ta.Slug, &ta.Category, &ta.ViewCount); err == nil {
+				data.TopArticles = append(data.TopArticles, ta)
+			}
+		}
+	}
+
+	// 4. Category distribution
+	catQuery := `SELECT category, COUNT(*) as cnt FROM news GROUP BY category ORDER BY cnt DESC`
+	catRows, err := r.db.Query(catQuery)
+	if err == nil {
+		defer catRows.Close()
+		for catRows.Next() {
+			var cc CategoryCount
+			if err := catRows.Scan(&cc.Category, &cc.Count); err == nil {
+				data.CategoryDistribution = append(data.CategoryDistribution, cc)
+			}
+		}
+	}
+
+	// 5. Score distribution
+	scoreRows, err := r.db.Query(`SELECT UPPER(value_label), COUNT(*) FROM news WHERE value_label != '' GROUP BY UPPER(value_label)`)
+	if err == nil {
+		defer scoreRows.Close()
+		for scoreRows.Next() {
+			var lbl string
+			var count int64
+			if err := scoreRows.Scan(&lbl, &count); err == nil {
+				switch lbl {
+				case "HIGH":
+					data.ScoreDistribution.High = count
+				case "MEDIUM":
+					data.ScoreDistribution.Medium = count
+				case "LOW":
+					data.ScoreDistribution.Low = count
+				}
+			}
+		}
+	}
+
+	return data, nil
+}

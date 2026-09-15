@@ -83,6 +83,8 @@ type Server struct {
 	backupDir string
 	// backupRetain is how many backups to keep (0 = no pruning).
 	backupRetain int
+	// startTime records when the server instance booted.
+	startTime time.Time
 }
 
 // ServerOptions configures the API server.
@@ -179,6 +181,7 @@ func NewServer(opts ServerOptions) *Server {
 		scheduler:          opts.Scheduler,
 		backupDir:          opts.BackupDir,
 		backupRetain:       opts.BackupRetain,
+		startTime:          time.Now(),
 	}
 	if opts.ViewRateLimit > 0 {
 		srv.viewLimiter = ratelimit.New(opts.ViewRateLimit, opts.ViewRateWindow)
@@ -246,6 +249,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /api/admin/autopublish/stop", s.requireAuth(s.csrfProtect(http.HandlerFunc(s.handleStopAutoPublish))))
 	mux.Handle("POST /api/admin/upload-image", s.requireAuth(s.csrfProtect(http.HandlerFunc(s.handleUploadImage))))
 	mux.Handle("GET /api/admin/backup", s.requireAuth(http.HandlerFunc(s.handleBackup)))
+	mux.Handle("GET /api/admin/analytics", s.requireAuth(http.HandlerFunc(s.handleAdminAnalytics)))
 	mux.Handle("/api/admin/", s.requireAuth(s.csrfProtect(admin)))
 
 	// Serve admin-uploaded images under /uploads/ when an upload directory
