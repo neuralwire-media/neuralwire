@@ -25,35 +25,6 @@ CREATE TABLE IF NOT EXISTS news (
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_news_status_published_at
-    ON news (status, published_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_news_category_status
-    ON news (category, status);
-
--- Public list with category filter sorts by published_at; include it in the
--- composite so SQLite can satisfy the ORDER BY from the index.
-CREATE INDEX IF NOT EXISTS idx_news_category_status_published
-    ON news (category, status, published_at DESC);
-
--- Admin list orders by created_at; a dedicated index avoids a full scan and
--- temp sort even when filtering by status.
-CREATE INDEX IF NOT EXISTS idx_news_created_at
-    ON news (created_at DESC);
-
--- Admin list with status filter orders by created_at DESC; this composite
--- lets SQLite satisfy both the filter and the sort from one index.
-CREATE INDEX IF NOT EXISTS idx_news_status_created_at
-    ON news (status, created_at DESC);
-
--- ExistsByURL runs once per feed item during every fetch cycle; without an
--- index this is a full table scan on each call.
-CREATE INDEX IF NOT EXISTS idx_news_url
-    ON news (url);
-
-CREATE INDEX IF NOT EXISTS idx_news_cluster_id
-    ON news (cluster_id);
-
 CREATE TABLE IF NOT EXISTS rss_sources (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     name            TEXT    NOT NULL,
@@ -83,6 +54,38 @@ CREATE TABLE IF NOT EXISTS article_views (
     viewer_key TEXT    NOT NULL DEFAULT '',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+`
+
+// indexes defines secondary indexes created after tables and additive columns exist.
+const indexes = `
+CREATE INDEX IF NOT EXISTS idx_news_status_published_at
+    ON news (status, published_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_news_category_status
+    ON news (category, status);
+
+-- Public list with category filter sorts by published_at; include it in the
+-- composite so SQLite can satisfy the ORDER BY from the index.
+CREATE INDEX IF NOT EXISTS idx_news_category_status_published
+    ON news (category, status, published_at DESC);
+
+-- Admin list orders by created_at; a dedicated index avoids a full scan and
+-- temp sort even when filtering by status.
+CREATE INDEX IF NOT EXISTS idx_news_created_at
+    ON news (created_at DESC);
+
+-- Admin list with status filter orders by created_at DESC; this composite
+-- lets SQLite satisfy both the filter and the sort from one index.
+CREATE INDEX IF NOT EXISTS idx_news_status_created_at
+    ON news (status, created_at DESC);
+
+-- ExistsByURL runs once per feed item during every fetch cycle; without an
+-- index this is a full table scan on each call.
+CREATE INDEX IF NOT EXISTS idx_news_url
+    ON news (url);
+
+CREATE INDEX IF NOT EXISTS idx_news_cluster_id
+    ON news (cluster_id);
 
 CREATE INDEX IF NOT EXISTS idx_article_views_news
     ON article_views (news_id, created_at);
@@ -107,12 +110,14 @@ var scoringColumns = []struct{ name, decl string }{
 	{"is_primary", "INTEGER NOT NULL DEFAULT 1"},
 }
 
-// Migrate applies the schema and additive migrations. It is idempotent.
+// Migrate applies the schema, additive migrations, and indexes. It is idempotent.
 func Migrate(db *sql.DB) error {
+	// 1. Create base tables
 	if _, err := db.Exec(schema); err != nil {
-		return err
+		return fmt.Errorf("create tables: %w", err)
 	}
 
+	// 2. Add additive columns for existing older schemas
 	existing := map[string]bool{}
 	rows, err := db.Query(`PRAGMA table_info(news)`)
 	if err != nil {
@@ -139,5 +144,11 @@ func Migrate(db *sql.DB) error {
 			return fmt.Errorf("add column %s: %w", col.name, err)
 		}
 	}
+
+	// 3. Create indexes after all tables and columns are guaranteed to exist
+	if _, err := db.Exec(indexes); err != nil {
+		return fmt.Errorf("create indexes: %w", err)
+	}
+
 	return nil
 }
