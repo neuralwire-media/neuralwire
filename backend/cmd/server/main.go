@@ -18,6 +18,7 @@ import (
 	"neuralwire/backend/internal/api"
 	"neuralwire/backend/internal/auth"
 	"neuralwire/backend/internal/backup"
+	"neuralwire/backend/internal/clustering"
 	"neuralwire/backend/internal/config"
 	"neuralwire/backend/internal/database"
 	"neuralwire/backend/internal/fetcher"
@@ -106,6 +107,10 @@ func main() {
 		settingsRepo,
 	)
 
+	clusterService := clustering.NewService(clustering.ServiceOptions{
+		Store: newsRepo,
+	})
+
 	rssFetcher := fetcher.NewFetcher(fetcher.FetcherOptions{
 		Sources:        sourceRepo,
 		News:           newsRepo,
@@ -122,6 +127,7 @@ func main() {
 		ScrapeDelayMax:     cfg.ScrapeDelayMax,
 		MaxInsertPerSource: cfg.ScrapeMaxInsertPerSource,
 		Scorer:             scoreService,
+		ClusterService:     clusterService,
 		UserAgent:          cfg.UserAgent,
 		HTTPClient:         netutil.SafeHTTPClient(30 * time.Second),
 		Logger:             slogLogger,

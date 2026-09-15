@@ -908,6 +908,44 @@ func (s *Server) handleRejectNews(w http.ResponseWriter, r *http.Request) {
 	s.handleStatusTransition(w, r, models.StatusRejected)
 }
 
+func (s *Server) handleSetPrimaryNews(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		s.writeError(w, http.StatusBadRequest, "invalid news id")
+		return
+	}
+
+	news, err := s.newsRepo.GetByID(id)
+	if err != nil {
+		s.logger.Printf("api: get news %d: %v", id, err)
+		s.writeError(w, http.StatusInternalServerError, "failed to load news")
+		return
+	}
+	if news == nil {
+		s.writeError(w, http.StatusNotFound, "news not found")
+		return
+	}
+
+	if news.ClusterID == "" {
+		s.writeError(w, http.StatusBadRequest, "news is not part of any story cluster")
+		return
+	}
+
+	if err := s.newsRepo.SetPrimaryInCluster(id, news.ClusterID); err != nil {
+		s.logger.Printf("api: set primary in cluster for %d: %v", id, err)
+		s.writeError(w, http.StatusInternalServerError, "failed to set primary in cluster")
+		return
+	}
+
+	updated, err := s.newsRepo.GetByID(id)
+	if err != nil || updated == nil {
+		s.logger.Printf("api: load updated news %d: %v", id, err)
+		s.writeError(w, http.StatusInternalServerError, "failed to load updated news")
+		return
+	}
+	s.writeJSON(w, http.StatusOK, updated)
+}
+
 func (s *Server) handleStatusTransition(w http.ResponseWriter, r *http.Request, status models.NewsStatus) {
 	id, err := pathID(r)
 	if err != nil {

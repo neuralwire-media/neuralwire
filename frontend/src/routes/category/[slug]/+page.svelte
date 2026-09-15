@@ -130,6 +130,29 @@
 							alt={post.title}
 							class="h-full w-full object-cover opacity-75 transition-all duration-550 group-hover:scale-105 group-hover:opacity-100"
 						/>
+						{#if post.cluster_count && post.cluster_count > 0}
+							<div class="absolute top-2 right-2">
+								<span
+									class="tag-mono inline-flex items-center gap-1 rounded border border-purple-500/40 bg-[#0A0E17]/90 px-2 py-0.5 text-[10px] font-bold text-purple-300 shadow-sm backdrop-blur-sm"
+									title="{post.cluster_count} sumber lain meliput berita ini"
+								>
+									<svg
+										class="h-3 w-3 text-purple-400"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+										/>
+									</svg>
+									+{post.cluster_count} sumber
+								</span>
+							</div>
+						{/if}
 					</a>
 
 					<!-- Card Body -->

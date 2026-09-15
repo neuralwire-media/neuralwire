@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS news (
     summary      TEXT    NOT NULL DEFAULT '',
     content      TEXT    NOT NULL DEFAULT '',
     image_url    TEXT    NOT NULL DEFAULT '',
+    cluster_id   TEXT    NOT NULL DEFAULT '',
+    is_primary   INTEGER NOT NULL DEFAULT 1,
     status       TEXT    NOT NULL DEFAULT 'draft'
                  CHECK (status IN ('draft','published','rejected')),
     published_at DATETIME,
@@ -48,6 +50,9 @@ CREATE INDEX IF NOT EXISTS idx_news_status_created_at
 -- index this is a full table scan on each call.
 CREATE INDEX IF NOT EXISTS idx_news_url
     ON news (url);
+
+CREATE INDEX IF NOT EXISTS idx_news_cluster_id
+    ON news (cluster_id);
 
 CREATE TABLE IF NOT EXISTS rss_sources (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -98,6 +103,8 @@ var scoringColumns = []struct{ name, decl string }{
 	{"value_reason", "TEXT NOT NULL DEFAULT ''"},
 	{"value_label", "TEXT NOT NULL DEFAULT ''"},
 	{"value_method", "TEXT NOT NULL DEFAULT ''"},
+	{"cluster_id", "TEXT NOT NULL DEFAULT ''"},
+	{"is_primary", "INTEGER NOT NULL DEFAULT 1"},
 }
 
 // Migrate applies the schema and additive migrations. It is idempotent.

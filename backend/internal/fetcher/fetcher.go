@@ -16,6 +16,7 @@ import (
 	"github.com/mmcdole/gofeed"
 
 	"neuralwire/backend/internal/ai"
+	"neuralwire/backend/internal/clustering"
 	"neuralwire/backend/internal/models"
 	"neuralwire/backend/internal/netutil"
 	"neuralwire/backend/internal/scoring"
@@ -78,6 +79,8 @@ type FetcherOptions struct {
 	// and attaches an advisory score/label. When nil, drafts are inserted
 	// with a zero score. Scoring never auto-publishes.
 	Scorer *scoring.ScoreService
+	// ClusterService groups incoming articles covering the same event into clusters.
+	ClusterService *clustering.Service
 	// UserAgent is sent on RSS feed requests. Empty uses the default
 	// NeuralwireBot dev UA.
 	UserAgent  string
@@ -98,6 +101,7 @@ type Fetcher struct {
 	scrapeDelayMax  time.Duration
 	maxInsert       int
 	scorer          *scoring.ScoreService
+	clusterService  *clustering.Service
 	client          *http.Client
 	parser          *gofeed.Parser
 	logger          *slog.Logger
@@ -150,6 +154,7 @@ func NewFetcher(opts FetcherOptions) *Fetcher {
 		scrapeDelayMax:  opts.ScrapeDelayMax,
 		maxInsert:       opts.MaxInsertPerSource,
 		scorer:          opts.Scorer,
+		clusterService:  opts.ClusterService,
 		client:          opts.HTTPClient,
 		parser:          parser,
 		logger:          opts.Logger,
@@ -398,6 +403,15 @@ func (f *Fetcher) processFeed(ctx context.Context, src models.RSSSource, feed *g
 			Content:  "",
 			ImageURL: imageURL,
 			Status:   models.StatusDraft,
+		}
+
+		if f.clusterService != nil {
+			match := f.clusterService.AssignCluster(ctx, title, summary)
+			article.ClusterID = match.ClusterID
+			article.IsPrimary = match.IsPrimary
+		} else {
+			article.ClusterID = clustering.GenerateClusterID()
+			article.IsPrimary = true
 		}
 
 		// Advisory news-value scoring: AI + heuristic weighted. This is only a

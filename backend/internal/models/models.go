@@ -51,6 +51,12 @@ type News struct {
 	// for trending endpoints (computed from article_views), not stored on
 	// the news row itself.
 	ViewCount int `json:"view_count"`
+
+	// Clustering fields: group multi-source coverage of the same event.
+	ClusterID       string `json:"cluster_id,omitempty"`
+	IsPrimary       bool   `json:"is_primary"`
+	ClusterCount    int    `json:"cluster_count,omitempty"`
+	ClusterCoverage []News `json:"cluster_coverage,omitempty"`
 }
 
 // AutoPublishConfig controls the scheduled auto-fetch and auto-publish
