@@ -1,17 +1,16 @@
-## Summary
-<!-- A clear, concise overview of what this PR changes and why. -->
+## Bug Description & Symptom
+<!-- Describe the defect, incorrect behavior, or error observed. -->
 
-## Type of Change
-- [ ] New feature (`.github/PULL_REQUEST_TEMPLATE/feature.md`)
-- [ ] Bug fix (`.github/PULL_REQUEST_TEMPLATE/bugfix.md`)
-- [ ] Security hardening (`.github/PULL_REQUEST_TEMPLATE/security.md`)
-- [ ] Refactor / chore (`.github/PULL_REQUEST_TEMPLATE/refactor.md`)
-- [ ] Documentation / Rules
+## Root Cause Analysis
+<!-- Detail the exact underlying cause discovered in code, data flow, or timing. -->
 
-## Scope Lock & Guardrails
-- [ ] Changes strictly address the target task without unrelated refactoring or dependency churn.
-- [ ] No compiler, typechecker, or linter errors bypassed (`any`, `@ts-ignore`, `eslint-disable`, empty `catch`).
-- [ ] Pre-existing local modifications and user states are preserved.
+## Proposed Fix
+<!-- Explain the minimal, correct fix implemented to resolve the root cause. -->
+
+## Scope Lock & Blast Radius
+- [ ] **Strict Scope Boundary**: Fix is limited strictly to the bug's root cause.
+- [ ] **No Symptom Patching**: The root data flow was addressed rather than defensive null-checks.
+- [ ] **Regression Test Added**: Automated test case verifying the fix and preventing regression.
 
 ## Mandatory Zero-Failure Pre-Commit Verification (AGENTS.md)
 *All commands below must be executed locally and pass with Exit Code 0 prior to creating the PR:*

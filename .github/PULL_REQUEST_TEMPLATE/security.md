@@ -1,17 +1,14 @@
-## Summary
-<!-- A clear, concise overview of what this PR changes and why. -->
+## Security Impact & Threat Model
+<!-- Describe the vulnerability, threat vector (SSRF, DoS, auth bypass, injection, secrets exposure), or hardening requirement. -->
 
-## Type of Change
-- [ ] New feature (`.github/PULL_REQUEST_TEMPLATE/feature.md`)
-- [ ] Bug fix (`.github/PULL_REQUEST_TEMPLATE/bugfix.md`)
-- [ ] Security hardening (`.github/PULL_REQUEST_TEMPLATE/security.md`)
-- [ ] Refactor / chore (`.github/PULL_REQUEST_TEMPLATE/refactor.md`)
-- [ ] Documentation / Rules
+## Hardening / Mitigation Implemented
+<!-- Detail the defensive measures applied (e.g. SafeDialContext, MaxBytesReader, bounds clamping, security headers, token strength checks). -->
 
-## Scope Lock & Guardrails
-- [ ] Changes strictly address the target task without unrelated refactoring or dependency churn.
-- [ ] No compiler, typechecker, or linter errors bypassed (`any`, `@ts-ignore`, `eslint-disable`, empty `catch`).
-- [ ] Pre-existing local modifications and user states are preserved.
+## Security Invariants Audited
+- [ ] **SSRF Defense**: Outgoing network requests use `netutil.SafeHTTPClient` or `netutil.SafeDialContext`.
+- [ ] **DoS & Memory Protection**: Request bodies are capped with `http.MaxBytesReader` and pagination bounds clamped.
+- [ ] **Secrets & Auth Protection**: No secrets, tokens, or credential files committed or leaked.
+- [ ] **Security Headers**: Standard headers (COOP, CORP, HSTS, X-Content-Type-Options) verified.
 
 ## Mandatory Zero-Failure Pre-Commit Verification (AGENTS.md)
 *All commands below must be executed locally and pass with Exit Code 0 prior to creating the PR:*
