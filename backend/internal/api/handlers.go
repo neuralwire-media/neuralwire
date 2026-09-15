@@ -19,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mmcdole/gofeed"
+
 	"neuralwire/backend/internal/backup"
 	"neuralwire/backend/internal/models"
 	"neuralwire/backend/internal/repository"
@@ -1129,6 +1131,281 @@ func (s *Server) handleAdminAnalytics(w http.ResponseWriter, r *http.Request) {
 	resp.System.NumGoroutines = runtime.NumGoroutine()
 
 	s.writeJSON(w, http.StatusOK, resp)
+}
+
+type createOrUpdateSourceRequest struct {
+	Name     string `json:"name"`
+	URL      string `json:"url"`
+	Category string `json:"category"`
+	Enabled  bool   `json:"enabled"`
+}
+
+type probeFeedRequest struct {
+	URL string `json:"url"`
+}
+
+type probeFeedItem struct {
+	Title       string `json:"title"`
+	Link        string `json:"link"`
+	PublishedAt string `json:"published_at,omitempty"`
+}
+
+type probeFeedResponse struct {
+	Valid       bool            `json:"valid"`
+	Title       string          `json:"title,omitempty"`
+	Description string          `json:"description,omitempty"`
+	ItemCount   int             `json:"item_count"`
+	Items       []probeFeedItem `json:"items,omitempty"`
+	Error       string          `json:"error,omitempty"`
+}
+
+func (s *Server) handleAdminListSources(w http.ResponseWriter, r *http.Request) {
+	if s.sourceRepo == nil {
+		s.writeError(w, http.StatusServiceUnavailable, "source repository is not configured")
+		return
+	}
+	sources, err := s.sourceRepo.ListAll()
+	if err != nil {
+		s.logger.Printf("api: list sources: %v", err)
+		s.writeError(w, http.StatusInternalServerError, "failed to list sources")
+		return
+	}
+	if sources == nil {
+		sources = []models.RSSSource{}
+	}
+	s.writeJSON(w, http.StatusOK, map[string]any{"data": sources})
+}
+
+func (s *Server) handleAdminCreateSource(w http.ResponseWriter, r *http.Request) {
+	if s.sourceRepo == nil {
+		s.writeError(w, http.StatusServiceUnavailable, "source repository is not configured")
+		return
+	}
+	var req createOrUpdateSourceRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+		s.writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	req.URL = strings.TrimSpace(req.URL)
+	req.Category = strings.ToLower(strings.TrimSpace(req.Category))
+	if req.Name == "" {
+		s.writeError(w, http.StatusBadRequest, "source name is required")
+		return
+	}
+	if req.URL == "" {
+		s.writeError(w, http.StatusBadRequest, "feed url is required")
+		return
+	}
+	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
+		s.writeError(w, http.StatusBadRequest, "feed url must start with http:// or https://")
+		return
+	}
+	if req.Category == "" {
+		req.Category = "ai"
+	}
+
+	src := models.RSSSource{
+		Name:     req.Name,
+		URL:      req.URL,
+		Category: req.Category,
+		Enabled:  req.Enabled,
+	}
+
+	id, err := s.sourceRepo.Create(src)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "unique") {
+			s.writeError(w, http.StatusConflict, "a feed source with this URL already exists")
+			return
+		}
+		s.logger.Printf("api: create source: %v", err)
+		s.writeError(w, http.StatusInternalServerError, "failed to create source")
+		return
+	}
+
+	created, err := s.sourceRepo.GetByID(id)
+	if err != nil || created == nil {
+		src.ID = id
+		s.writeJSON(w, http.StatusCreated, src)
+		return
+	}
+	s.writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) handleAdminUpdateSource(w http.ResponseWriter, r *http.Request) {
+	if s.sourceRepo == nil {
+		s.writeError(w, http.StatusServiceUnavailable, "source repository is not configured")
+		return
+	}
+	id, err := pathID(r)
+	if err != nil {
+		s.writeError(w, http.StatusBadRequest, "invalid source id")
+		return
+	}
+	var req createOrUpdateSourceRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+		s.writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	req.URL = strings.TrimSpace(req.URL)
+	req.Category = strings.ToLower(strings.TrimSpace(req.Category))
+	if req.Name == "" {
+		s.writeError(w, http.StatusBadRequest, "source name is required")
+		return
+	}
+	if req.URL == "" {
+		s.writeError(w, http.StatusBadRequest, "feed url is required")
+		return
+	}
+	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
+		s.writeError(w, http.StatusBadRequest, "feed url must start with http:// or https://")
+		return
+	}
+	if req.Category == "" {
+		req.Category = "ai"
+	}
+
+	src := models.RSSSource{
+		ID:       id,
+		Name:     req.Name,
+		URL:      req.URL,
+		Category: req.Category,
+		Enabled:  req.Enabled,
+	}
+
+	if err := s.sourceRepo.Update(src); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "not found") {
+			s.writeError(w, http.StatusNotFound, "rss source not found")
+			return
+		}
+		if strings.Contains(strings.ToLower(err.Error()), "unique") {
+			s.writeError(w, http.StatusConflict, "another source with this URL already exists")
+			return
+		}
+		s.logger.Printf("api: update source: %v", err)
+		s.writeError(w, http.StatusInternalServerError, "failed to update source")
+		return
+	}
+
+	updated, err := s.sourceRepo.GetByID(id)
+	if err != nil || updated == nil {
+		s.writeJSON(w, http.StatusOK, src)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, updated)
+}
+
+func (s *Server) handleAdminToggleSource(w http.ResponseWriter, r *http.Request) {
+	if s.sourceRepo == nil {
+		s.writeError(w, http.StatusServiceUnavailable, "source repository is not configured")
+		return
+	}
+	id, err := pathID(r)
+	if err != nil {
+		s.writeError(w, http.StatusBadRequest, "invalid source id")
+		return
+	}
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+		s.writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if err := s.sourceRepo.ToggleEnabled(id, req.Enabled); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "not found") {
+			s.writeError(w, http.StatusNotFound, "rss source not found")
+			return
+		}
+		s.logger.Printf("api: toggle source %d: %v", id, err)
+		s.writeError(w, http.StatusInternalServerError, "failed to toggle source")
+		return
+	}
+	s.writeJSON(w, http.StatusOK, map[string]any{"id": id, "enabled": req.Enabled})
+}
+
+func (s *Server) handleAdminDeleteSource(w http.ResponseWriter, r *http.Request) {
+	if s.sourceRepo == nil {
+		s.writeError(w, http.StatusServiceUnavailable, "source repository is not configured")
+		return
+	}
+	id, err := pathID(r)
+	if err != nil {
+		s.writeError(w, http.StatusBadRequest, "invalid source id")
+		return
+	}
+	if err := s.sourceRepo.Delete(id); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "not found") {
+			s.writeError(w, http.StatusNotFound, "rss source not found")
+			return
+		}
+		s.logger.Printf("api: delete source %d: %v", id, err)
+		s.writeError(w, http.StatusInternalServerError, "failed to delete source")
+		return
+	}
+	s.writeJSON(w, http.StatusOK, map[string]any{"success": true})
+}
+
+func (s *Server) handleAdminTestFeed(w http.ResponseWriter, r *http.Request) {
+	var req probeFeedRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
+		s.writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	feedURL := strings.TrimSpace(req.URL)
+	if feedURL == "" {
+		s.writeError(w, http.StatusBadRequest, "feed url cannot be empty")
+		return
+	}
+	if !strings.HasPrefix(feedURL, "http://") && !strings.HasPrefix(feedURL, "https://") {
+		s.writeError(w, http.StatusBadRequest, "feed url must start with http:// or https://")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	parser := gofeed.NewParser()
+	parser.Client = client
+	parser.UserAgent = "Mozilla/5.0 (compatible; NeuralwireBot/1.0; +https://neuralwire.example)"
+
+	feed, err := parser.ParseURLWithContext(feedURL, ctx)
+	if err != nil {
+		s.writeJSON(w, http.StatusOK, probeFeedResponse{
+			Valid: false,
+			Error: err.Error(),
+		})
+		return
+	}
+
+	items := make([]probeFeedItem, 0, 3)
+	for i, item := range feed.Items {
+		if i >= 3 {
+			break
+		}
+		if item == nil {
+			continue
+		}
+		pub := item.Published
+		if pub == "" {
+			pub = item.Updated
+		}
+		items = append(items, probeFeedItem{
+			Title:       strings.TrimSpace(item.Title),
+			Link:        strings.TrimSpace(item.Link),
+			PublishedAt: pub,
+		})
+	}
+
+	s.writeJSON(w, http.StatusOK, probeFeedResponse{
+		Valid:       true,
+		Title:       feed.Title,
+		Description: feed.Description,
+		ItemCount:   len(feed.Items),
+		Items:       items,
+	})
 }
 
 // --- helpers --------------------------------------------------------------

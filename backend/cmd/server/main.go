@@ -176,6 +176,7 @@ func main() {
 		NewsRepo:           newsRepo,
 		CategoryRepo:       categoryRepo,
 		SettingsRepo:       settingsRepo,
+		SourceRepo:         sourceRepo,
 		ViewRateLimit:      cfg.ViewRateLimit,
 		TrendingCacheTTL:   time.Duration(cfg.TrendingCacheTTLSeconds) * time.Second,
 		TrustProxy:         cfg.TrustProxy,

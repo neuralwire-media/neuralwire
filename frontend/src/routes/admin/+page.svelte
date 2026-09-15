@@ -657,7 +657,7 @@
 			class="rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0F172A]/10 p-6 font-mono text-xs"
 		>
 			<span class="mb-4 block tracking-wider text-slate-500 uppercase">Core Quick Links</span>
-			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
+			<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
 				<a
 					href="/admin/drafts"
 					class="flex items-center justify-between rounded-lg border border-[rgba(255,255,255,0.06)] p-3 transition-colors hover:border-[#22D3EE]/30 hover:bg-[#22D3EE]/5"
@@ -680,10 +680,24 @@
 					<span class="font-bold text-[#22D3EE]">»</span>
 				</a>
 				<a
+					href="/admin/sources"
+					class="flex items-center justify-between rounded-lg border border-[rgba(255,255,255,0.06)] p-3 transition-colors hover:border-[#22D3EE]/30 hover:bg-[#22D3EE]/5"
+				>
+					<span>4. SOURCES</span>
+					<span class="font-bold text-[#22D3EE]">»</span>
+				</a>
+				<a
+					href="/admin/analytics"
+					class="flex items-center justify-between rounded-lg border border-[rgba(255,255,255,0.06)] p-3 transition-colors hover:border-[#22D3EE]/30 hover:bg-[#22D3EE]/5"
+				>
+					<span>5. METRICS</span>
+					<span class="font-bold text-[#22D3EE]">»</span>
+				</a>
+				<a
 					href="/"
 					class="flex items-center justify-between rounded-lg border border-[rgba(255,255,255,0.06)] p-3 transition-colors hover:border-slate-500 hover:bg-slate-800/10"
 				>
-					<span>4. PUBLIC HOME</span>
+					<span>6. PUBLIC</span>
 					<span class="text-slate-400">»</span>
 				</a>
 			</div>
