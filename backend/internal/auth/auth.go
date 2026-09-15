@@ -24,7 +24,7 @@ type Manager struct {
 // development default so the server still boots in local development.
 func NewManager(secret string, ttl time.Duration) *Manager {
 	if secret == "" {
-		secret = devDefaultSecret
+		secret = DevDefaultSecret
 	}
 	if ttl <= 0 {
 		ttl = 24 * time.Hour
@@ -88,7 +88,26 @@ func (m *Manager) sign(payload string) []byte {
 	return mac.Sum(nil)
 }
 
-// devDefaultSecret is the fallback used when ADMIN_TOKEN_SECRET is unset.
+// DevDefaultSecret is the fallback used when ADMIN_TOKEN_SECRET is unset.
 // It is intentionally fixed so tokens survive restarts in development; the
 // README and .env.example instruct operators to change it.
-const devDefaultSecret = "neuralwire-dev-secret-7f3c9a1e4b8d2f6a"
+const DevDefaultSecret = "neuralwire-dev-secret-7f3c9a1e4b8d2f6a"
+
+// MinSecretLength is the required minimum character length for ADMIN_TOKEN_SECRET in production.
+const MinSecretLength = 32
+
+// ValidateSecretStrength checks that the secret is strong enough for production use:
+// not empty, not the default development secret, and meeting minimum length.
+func ValidateSecretStrength(secret string) error {
+	trimmed := strings.TrimSpace(secret)
+	if trimmed == "" {
+		return errors.New("admin token secret cannot be empty")
+	}
+	if trimmed == DevDefaultSecret {
+		return errors.New("refusing to use default development secret in production")
+	}
+	if len(trimmed) < MinSecretLength {
+		return fmt.Errorf("admin token secret is too short (%d chars, minimum %d chars required)", len(trimmed), MinSecretLength)
+	}
+	return nil
+}

@@ -23,6 +23,7 @@ import (
 
 	"neuralwire/backend/internal/backup"
 	"neuralwire/backend/internal/models"
+	"neuralwire/backend/internal/netutil"
 	"neuralwire/backend/internal/repository"
 )
 
@@ -297,7 +298,13 @@ func (s *Server) handleRobotsTXT(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListNews(w http.ResponseWriter, r *http.Request) {
 	category := strings.TrimSpace(r.URL.Query().Get("category"))
+	if len(category) > 100 {
+		category = category[:100]
+	}
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(query) > 200 {
+		query = query[:200]
+	}
 
 	page, err := parsePositiveInt(r.URL.Query().Get("page"), 1)
 	if err != nil {
@@ -586,6 +593,9 @@ func (s *Server) handleAdminListNews(w http.ResponseWriter, r *http.Request) {
 	}
 
 	category := strings.TrimSpace(r.URL.Query().Get("category"))
+	if len(category) > 100 {
+		category = category[:100]
+	}
 	valueLabel := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("value_label")))
 	if valueLabel != "" && valueLabel != "HIGH" && valueLabel != "MEDIUM" && valueLabel != "LOW" {
 		valueLabel = ""
@@ -832,12 +842,32 @@ func (s *Server) handleCreateNews(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusBadRequest, "title is required")
 		return
 	}
+	if len(req.Title) > 500 {
+		s.writeError(w, http.StatusBadRequest, "title exceeds maximum length of 500 characters")
+		return
+	}
 	if req.URL == "" {
 		s.writeError(w, http.StatusBadRequest, "url is required")
 		return
 	}
+	if len(req.URL) > 2048 {
+		s.writeError(w, http.StatusBadRequest, "url exceeds maximum length of 2048 characters")
+		return
+	}
+	if len(req.Summary) > 5000 {
+		s.writeError(w, http.StatusBadRequest, "summary exceeds maximum length of 5000 characters")
+		return
+	}
+	if len(req.ImageURL) > 2048 {
+		s.writeError(w, http.StatusBadRequest, "image_url exceeds maximum length of 2048 characters")
+		return
+	}
 	if req.Category == "" {
 		req.Category = "ai"
+	}
+	if len(req.Category) > 100 {
+		s.writeError(w, http.StatusBadRequest, "category exceeds maximum length of 100 characters")
+		return
 	}
 	if _, err := s.categoryRepo.EnsureCreated(req.Category); err != nil {
 		s.logger.Printf("api: ensure category %q: %v", req.Category, err)
@@ -941,8 +971,24 @@ func (s *Server) handleUpdateNews(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusBadRequest, "title is required")
 		return
 	}
+	if len(req.Title) > 500 {
+		s.writeError(w, http.StatusBadRequest, "title exceeds maximum length of 500 characters")
+		return
+	}
+	if len(req.Summary) > 5000 {
+		s.writeError(w, http.StatusBadRequest, "summary exceeds maximum length of 5000 characters")
+		return
+	}
+	if len(req.ImageURL) > 2048 {
+		s.writeError(w, http.StatusBadRequest, "image_url exceeds maximum length of 2048 characters")
+		return
+	}
 	if req.Category == "" {
 		req.Category = "ai"
+	}
+	if len(req.Category) > 100 {
+		s.writeError(w, http.StatusBadRequest, "category exceeds maximum length of 100 characters")
+		return
 	}
 	if _, err := s.categoryRepo.EnsureCreated(req.Category); err != nil {
 		s.logger.Printf("api: ensure category %q: %v", req.Category, err)
@@ -1025,7 +1071,7 @@ type bulkNewsResponse struct {
 
 func (s *Server) handleBulkNewsAction(w http.ResponseWriter, r *http.Request) {
 	var req bulkNewsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		s.writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -1193,16 +1239,26 @@ func (s *Server) handleAdminCreateSource(w http.ResponseWriter, r *http.Request)
 		s.writeError(w, http.StatusBadRequest, "source name is required")
 		return
 	}
+	if len(req.Name) > 200 {
+		s.writeError(w, http.StatusBadRequest, "source name exceeds maximum length of 200 characters")
+		return
+	}
 	if req.URL == "" {
 		s.writeError(w, http.StatusBadRequest, "feed url is required")
 		return
 	}
-	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
-		s.writeError(w, http.StatusBadRequest, "feed url must start with http:// or https://")
-		return
+	if !s.skipSSRFCheck {
+		if err := netutil.ValidateURL(req.URL); err != nil {
+			s.writeError(w, http.StatusBadRequest, "invalid feed url: "+err.Error())
+			return
+		}
 	}
 	if req.Category == "" {
 		req.Category = "ai"
+	}
+	if len(req.Category) > 100 {
+		s.writeError(w, http.StatusBadRequest, "category exceeds maximum length of 100 characters")
+		return
 	}
 
 	src := models.RSSSource{
@@ -1254,16 +1310,26 @@ func (s *Server) handleAdminUpdateSource(w http.ResponseWriter, r *http.Request)
 		s.writeError(w, http.StatusBadRequest, "source name is required")
 		return
 	}
+	if len(req.Name) > 200 {
+		s.writeError(w, http.StatusBadRequest, "source name exceeds maximum length of 200 characters")
+		return
+	}
 	if req.URL == "" {
 		s.writeError(w, http.StatusBadRequest, "feed url is required")
 		return
 	}
-	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
-		s.writeError(w, http.StatusBadRequest, "feed url must start with http:// or https://")
-		return
+	if !s.skipSSRFCheck {
+		if err := netutil.ValidateURL(req.URL); err != nil {
+			s.writeError(w, http.StatusBadRequest, "invalid feed url: "+err.Error())
+			return
+		}
 	}
 	if req.Category == "" {
 		req.Category = "ai"
+	}
+	if len(req.Category) > 100 {
+		s.writeError(w, http.StatusBadRequest, "category exceeds maximum length of 100 characters")
+		return
 	}
 
 	src := models.RSSSource{
@@ -1358,17 +1424,18 @@ func (s *Server) handleAdminTestFeed(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, http.StatusBadRequest, "feed url cannot be empty")
 		return
 	}
-	if !strings.HasPrefix(feedURL, "http://") && !strings.HasPrefix(feedURL, "https://") {
-		s.writeError(w, http.StatusBadRequest, "feed url must start with http:// or https://")
-		return
+	if !s.skipSSRFCheck {
+		if err := netutil.ValidateURL(feedURL); err != nil {
+			s.writeError(w, http.StatusBadRequest, "invalid feed url: "+err.Error())
+			return
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
-	client := &http.Client{Timeout: 15 * time.Second}
 	parser := gofeed.NewParser()
-	parser.Client = client
+	parser.Client = s.probeClient
 	parser.UserAgent = "Mozilla/5.0 (compatible; NeuralwireBot/1.0; +https://neuralwire.example)"
 
 	feed, err := parser.ParseURLWithContext(feedURL, ctx)

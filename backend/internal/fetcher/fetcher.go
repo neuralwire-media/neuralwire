@@ -17,6 +17,7 @@ import (
 
 	"neuralwire/backend/internal/ai"
 	"neuralwire/backend/internal/models"
+	"neuralwire/backend/internal/netutil"
 	"neuralwire/backend/internal/scoring"
 	"neuralwire/backend/internal/scraper"
 )
@@ -119,7 +120,7 @@ type FetchProgress struct {
 // NewFetcher builds a Fetcher.
 func NewFetcher(opts FetcherOptions) *Fetcher {
 	if opts.HTTPClient == nil {
-		opts.HTTPClient = &http.Client{Timeout: 30 * time.Second}
+		opts.HTTPClient = netutil.SafeHTTPClient(30 * time.Second)
 	}
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()

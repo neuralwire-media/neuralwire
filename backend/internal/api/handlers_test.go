@@ -1866,13 +1866,30 @@ func TestAdminSourcesProbe(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	s := newTestServer(t)
+	db, err := database.Open(":memory:")
+	if err != nil {
+		t.Fatalf("open in-memory db: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if err := database.Migrate(db); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+
+	s := NewServer(ServerOptions{
+		SourceRepo:    repository.NewRSSSourceRepository(db),
+		Auth:          auth.NewManager("test-secret", 0),
+		AdminUser:     testAdminUser,
+		AdminPass:     testAdminPass,
+		Logger:        log.New(io.Discard, "", 0),
+		ProbeClient:   ts.Client(),
+		SkipSSRFCheck: true,
+	})
 	token := adminToken(t, s)
 
-	// 1. Probe valid mock feed
+	// 1. Probe valid mock feed with test probe client
 	rec := doJSONAs(t, s, http.MethodPost, "/api/admin/sources/test", map[string]string{"url": ts.URL}, token)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("probe valid code = %d, want 200", rec.Code)
+		t.Fatalf("probe valid code = %d, want 200, body = %s", rec.Code, rec.Body.String())
 	}
 	var resp probeFeedResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
@@ -1882,22 +1899,113 @@ func TestAdminSourcesProbe(t *testing.T) {
 		t.Errorf("unexpected probe response: %+v", resp)
 	}
 
-	// 2. Probe invalid URL (bad scheme)
-	rec = doJSONAs(t, s, http.MethodPost, "/api/admin/sources/test", map[string]string{"url": "ftp://invalid.com"}, token)
+	// 2. Probe empty URL
+	rec = doJSONAs(t, s, http.MethodPost, "/api/admin/sources/test", map[string]string{"url": ""}, token)
 	if rec.Code != http.StatusBadRequest {
-		t.Errorf("invalid scheme code = %d, want 400", rec.Code)
+		t.Errorf("empty url code = %d, want 400", rec.Code)
+	}
+}
+
+func TestAdminSourcesSSRFBlocked(t *testing.T) {
+	// Standard server with active SSRF protection (SkipSSRFCheck: false)
+	s := newTestServer(t)
+	token := adminToken(t, s)
+
+	disallowedURLs := []string{
+		"http://127.0.0.1:8080/feed.xml",
+		"http://127.0.1.1/feed.xml",
+		"http://localhost:8080/feed.xml",
+		"http://10.0.0.1/feed.xml",
+		"http://192.168.1.1/feed.xml",
+		"http://169.254.169.254/latest/meta-data/",
+		"http://[::1]/feed.xml",
+		"ftp://example.com/feed.xml",
+		"file:///etc/passwd",
 	}
 
-	// 3. Probe unreachable URL -> returns valid: false with error
-	rec = doJSONAs(t, s, http.MethodPost, "/api/admin/sources/test", map[string]string{"url": "http://127.0.0.1:59999/nonexistent"}, token)
+	for _, rawURL := range disallowedURLs {
+		t.Run("probe_"+rawURL, func(t *testing.T) {
+			rec := doJSONAs(t, s, http.MethodPost, "/api/admin/sources/test", map[string]string{"url": rawURL}, token)
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("probe %q code = %d, want 400 (SSRF blocked)", rawURL, rec.Code)
+			}
+		})
+
+		t.Run("create_source_"+rawURL, func(t *testing.T) {
+			rec := doJSONAs(t, s, http.MethodPost, "/api/admin/sources", map[string]any{
+				"name": "Evil Source",
+				"url":  rawURL,
+			}, token)
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("create source with %q code = %d, want 400 (SSRF blocked)", rawURL, rec.Code)
+			}
+		})
+	}
+}
+
+func TestBulkNewsActionBodyLimit(t *testing.T) {
+	s := newTestServer(t)
+	token := adminToken(t, s)
+
+	// Create an oversized body (> 1MB)
+	hugeString := strings.Repeat("x", 2<<20)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/news/bulk", strings.NewReader(`{"action":"publish","ids":[`+hugeString+`]}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("oversized bulk action code = %d, want 400", rec.Code)
+	}
+}
+
+func TestCreateNewsValidationLimits(t *testing.T) {
+	s := newTestServer(t)
+	token := adminToken(t, s)
+
+	// 1. Oversized title (> 500 chars)
+	longTitle := strings.Repeat("a", 501)
+	rec := doJSONAs(t, s, http.MethodPost, "/api/admin/news", map[string]any{
+		"title": longTitle,
+		"url":   "https://example.com/valid",
+	}, token)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("oversized title code = %d, want 400", rec.Code)
+	}
+
+	// 2. Oversized summary (> 5000 chars)
+	longSummary := strings.Repeat("b", 5001)
+	rec = doJSONAs(t, s, http.MethodPost, "/api/admin/news", map[string]any{
+		"title":   "Valid Title",
+		"url":     "https://example.com/valid",
+		"summary": longSummary,
+	}, token)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("oversized summary code = %d, want 400", rec.Code)
+	}
+}
+
+func TestEnhancedSecurityHeaders(t *testing.T) {
+	s := newTestServer(t)
+	rec := doJSON(t, s, http.MethodGet, "/api/categories", nil)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("unreachable probe code = %d, want 200 with valid:false", rec.Code)
+		t.Fatalf("get categories code = %d, want 200", rec.Code)
 	}
-	var unreachResp probeFeedResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &unreachResp); err != nil {
-		t.Fatalf("unmarshal unreach resp: %v", err)
+
+	headers := map[string]string{
+		"X-Content-Type-Options":       "nosniff",
+		"X-Frame-Options":              "DENY",
+		"Referrer-Policy":              "strict-origin-when-cross-origin",
+		"Cross-Origin-Opener-Policy":   "same-origin",
+		"Cross-Origin-Resource-Policy": "same-origin",
+		"X-XSS-Protection":             "0",
+		"Strict-Transport-Security":    "max-age=31536000; includeSubDomains",
 	}
-	if unreachResp.Valid {
-		t.Errorf("expected valid = false for unreachable feed, got true")
+
+	for header, want := range headers {
+		if got := rec.Header().Get(header); got != want {
+			t.Errorf("header %q = %q, want %q", header, got, want)
+		}
 	}
 }

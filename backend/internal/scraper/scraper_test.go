@@ -76,7 +76,7 @@ func TestScrapeExtractsCleanHTML(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := New(Options{Logger: discardLogger(), Timeout: 5 * time.Second})
+	s := New(Options{Logger: discardLogger(), Timeout: 5 * time.Second, HTTPClient: srv.Client()})
 	article, err := s.Scrape(context.Background(), srv.URL)
 	if err != nil {
 		t.Fatalf("Scrape: %v", err)
@@ -152,7 +152,7 @@ func TestScrapeFollowsRedirect(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	s := New(Options{Logger: discardLogger(), Timeout: 5 * time.Second})
+	s := New(Options{Logger: discardLogger(), Timeout: 5 * time.Second, HTTPClient: srv.Client()})
 	article, err := s.Scrape(context.Background(), srv.URL)
 	if err != nil {
 		t.Fatalf("Scrape: %v", err)
@@ -176,7 +176,7 @@ func TestScrapeRejectsNonHTML(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := New(Options{Logger: discardLogger(), Timeout: 5 * time.Second})
+	s := New(Options{Logger: discardLogger(), Timeout: 5 * time.Second, HTTPClient: srv.Client()})
 	if _, err := s.Scrape(context.Background(), srv.URL); err == nil {
 		t.Error("Scrape(non-HTML) succeeded, want error")
 	}
@@ -188,7 +188,7 @@ func TestScrapeRejectsErrorStatus(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := New(Options{Logger: discardLogger(), Timeout: 5 * time.Second})
+	s := New(Options{Logger: discardLogger(), Timeout: 5 * time.Second, HTTPClient: srv.Client()})
 	if _, err := s.Scrape(context.Background(), srv.URL); err == nil {
 		t.Error("Scrape(404) succeeded, want error")
 	}
@@ -200,7 +200,7 @@ func TestScrapeTimeout(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := New(Options{Logger: discardLogger(), Timeout: 200 * time.Millisecond})
+	s := New(Options{Logger: discardLogger(), Timeout: 200 * time.Millisecond, HTTPClient: srv.Client()})
 	start := time.Now()
 	if _, err := s.Scrape(context.Background(), srv.URL); err == nil {
 		t.Fatal("Scrape(slow page) succeeded, want timeout error")
@@ -219,9 +219,24 @@ func TestScrapeHonorsParentContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // already cancelled
 
-	s := New(Options{Logger: discardLogger(), Timeout: 5 * time.Second})
+	s := New(Options{Logger: discardLogger(), Timeout: 5 * time.Second, HTTPClient: srv.Client()})
 	if _, err := s.Scrape(ctx, srv.URL); err == nil {
 		t.Error("Scrape(cancelled ctx) succeeded, want error")
+	}
+}
+
+func TestScrapeRejectsSSRF(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		io.WriteString(w, articleHTML)
+	}))
+	defer srv.Close()
+
+	// Default scraper without overridden HTTPClient uses netutil.SafeHTTPClient.
+	// Scraping srv.URL (which is 127.0.0.1 loopback) must be blocked as SSRF!
+	s := New(Options{Logger: discardLogger(), Timeout: 5 * time.Second})
+	if _, err := s.Scrape(context.Background(), srv.URL); err == nil {
+		t.Fatal("Scrape(loopback SSRF URL) succeeded, want SSRF blocked error")
 	}
 }
 

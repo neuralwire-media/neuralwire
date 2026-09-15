@@ -21,6 +21,7 @@ import (
 	readability "codeberg.org/readeck/go-readability/v2"
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/net/html"
+	"neuralwire/backend/internal/netutil"
 )
 
 // Article is the extracted readable content of a single web page.
@@ -46,6 +47,8 @@ type Options struct {
 	UserAgent string
 	// MaxBytes caps the size of the response body read (default 5 MiB).
 	MaxBytes int64
+	// HTTPClient overrides the outbound HTTP client (defaults to netutil.SafeHTTPClient).
+	HTTPClient *http.Client
 	// Logger receives scrape diagnostics.
 	Logger *slog.Logger
 }
@@ -73,10 +76,12 @@ func New(opts Options) *Scraper {
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()
 	}
+	client := opts.HTTPClient
+	if client == nil {
+		client = netutil.SafeHTTPClient(opts.Timeout)
+	}
 	return &Scraper{
-		// The per-request timeout is enforced by the context; the client has
-		// no global timeout so redirects are handled by the default policy.
-		client:    &http.Client{},
+		client:    client,
 		userAgent: opts.UserAgent,
 		maxBytes:  opts.MaxBytes,
 		timeout:   opts.Timeout,

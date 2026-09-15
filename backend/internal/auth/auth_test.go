@@ -91,3 +91,26 @@ func TestDefaultSecretIsStable(t *testing.T) {
 		t.Errorf("Validate with default secret: %v", err)
 	}
 }
+
+func TestValidateSecretStrength(t *testing.T) {
+	tests := []struct {
+		name      string
+		secret    string
+		expectErr bool
+	}{
+		{name: "empty", secret: "", expectErr: true},
+		{name: "whitespace", secret: "   ", expectErr: true},
+		{name: "default dev secret", secret: DevDefaultSecret, expectErr: true},
+		{name: "too short", secret: "short-secret-12345", expectErr: true},
+		{name: "valid strong secret", secret: "a-very-long-and-secure-production-secret-1234567890", expectErr: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateSecretStrength(tt.secret)
+			if (err != nil) != tt.expectErr {
+				t.Errorf("ValidateSecretStrength(%q) err = %v, wantErr = %v", tt.secret, err, tt.expectErr)
+			}
+		})
+	}
+}
