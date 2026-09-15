@@ -208,20 +208,26 @@ npm run dev                 # starts on :5173
 
 ## Development Workflow
 
-This repo uses a **two-branch workflow with branch protection**:
+Neuralwire uses the **Feature Branching Strategy (GitHub Flow)** off `main`:
 
 ```
-development (work freely, CI runs, NO deploy)
-      │  push + open PR
-      ▼
-main (protected, CI must pass, deploys to production)
+main (protected production branch, deploys on merge)
+  │
+  ├── branch off main: feat/*, fix/*, docs/*, refactor/*, security/*, ci/*
+  │     (develop, run local verification suite, test localhost E2E)
+  │
+  └── open Pull Request -> main (CI must pass -> review -> merge -> deploy)
 ```
 
-1. Create a feature branch from `development`
-2. Commit and push — CI runs on every push
-3. Open a **Pull Request** to `main`
-4. CI must pass (`Build, vet & test` + `Install, check, lint & build`)
-5. Merge → Railway auto-deploys to production
+1. **Pull latest `main`**: `git checkout main && git pull origin main`
+2. **Branch out**: `git checkout -b <type>/<kebab-case-name>` (e.g. `feat/interactive-cluster-ui`)
+3. **Develop & verify locally**:
+   - Backend suite: `gofmt -w . && gofmt -l . && go vet ./... && go test -count=1 ./...`
+   - Frontend suite: `npm run format && npm run lint && npm run check && npm run build`
+   - Mandatory live localhost smoke test (clean server boot, 0 panics, 0 unexpected 4xx/5xx).
+4. **Push & open Pull Request** targeting `main` using the appropriate template.
+5. **CI must pass** (`Backend CI` + `Frontend CI` = 100% green).
+6. **Merge** → auto-deploys to production.
 
 > `main` is **protected**: direct pushes are blocked, force-push is blocked, and all commits must come through PRs with green CI.
 
@@ -314,7 +320,7 @@ git push -u origin rollback-v1.0.0
 - Frontend blank or assets 404
 - Health check (`/api/healthz`) not returning 200
 
-**After rollback:** investigate the root cause on `development`, fix it, and ship a new release — do not keep patching the rolled-back code.
+**After rollback:** investigate the root cause on a new fix branch (`fix/...`), fix it, and ship a new release — do not keep patching the rolled-back code.
 
 ---
 
