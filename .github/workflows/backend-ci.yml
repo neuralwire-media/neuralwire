@@ -73,6 +73,8 @@ jobs:
 
       - name: Security audit (govulncheck)
         if: steps.filter.outputs.backend == 'true'
+        env:
+          GOTOOLCHAIN: auto
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
       - name: Build server binary artifact
