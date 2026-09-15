@@ -40,7 +40,18 @@ npm run build
 - `npm run lint` MUST pass with "All matched files use Prettier code style!" and 0 ESLint errors.
 - `npm run check` and `npm run build` MUST exit with 0.
 
-### 1.3 Truthfulness & Real Execution Invariant
+### 1.3 Mandatory Live Localhost End-to-End (E2E) Verification Protocol
+Before proposing a commit or Pull Request, the agent/developer MUST execute live localhost smoke testing:
+1. **Boot Live Services on Localhost**:
+   - Start the Go backend server (and frontend preview if applicable) on localhost with a test configuration.
+2. **Execute Real End-to-End Tests**:
+   - Test all user scenarios, modified endpoints, and feature flows against the running localhost server via real HTTP requests (`curl` or API client).
+   - Validate live HTTP status codes (200 OK), response payloads, database state changes, and server logs.
+3. **Confirm Zero Runtime Defects & Graceful Cleanup**:
+   - Verify that the running server produces 0 panics, 0 unhandled runtime errors, and 0 unexpected 5xx responses during the entire E2E test run.
+   - Gracefully terminate the test server process after verification completes.
+
+### 1.4 Truthfulness & Real Execution Invariant
 - **NEVER** claim or fabricate verification results without actually running the shell commands.
 - **NEVER** bypass or suppress compiler, linter, or typechecker errors using quick-fix escapes (e.g. `@ts-ignore`, `any`, `eslint-disable`, empty `catch` blocks).
 
