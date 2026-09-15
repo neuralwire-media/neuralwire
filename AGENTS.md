@@ -78,9 +78,29 @@ Before proposing a commit or Pull Request, the agent/developer MUST execute live
 
 ## 3. Developer & Git Guardrails
 
+### 3.1 Feature Branching Strategy (MANDATORY)
+1. **Base & Target Branch**:
+   - `main` is the single source of truth for stable production code.
+   - All tasks (features, bug fixes, refactors, docs, security fixes, CI) MUST branch off the latest `main`.
+2. **Branch Naming Standard (Kebab-Case)**:
+   - Features: `feat/<feature-name>` (e.g. `feat/interactive-cluster-ui`)
+   - Bug fixes: `fix/<bug-name>` (e.g. `fix/legacy-schema-migration`)
+   - Documentation & Rules: `docs/<topic>` (e.g. `docs/git-branching-strategy`)
+   - Refactoring: `refactor/<component>` (e.g. `refactor/news-repository`)
+   - Security Hardening: `security/<scope>` (e.g. `security/ssrf-safedialer`)
+   - CI & Tooling: `ci/<pipeline>` (e.g. `ci/github-multi-template`)
+3. **Workflow Lifecycle**:
+   1. `git checkout main && git pull origin main`
+   2. `git checkout -b <type>/<kebab-case-name>`
+   3. Develop & execute mandatory local verification suite + live localhost E2E smoke test.
+   4. Obtain explicit user confirmation before committing.
+   5. `git push origin <type>/<kebab-case-name>`
+   6. Open Pull Request with target `base: main` using the appropriate PR template.
+   7. Confirm all GitHub Actions CI checks pass with 100% green status.
+
+### 3.2 Permissions & Scope Lock Invariants
 1. **Explicit Permission Required**:
    - NEVER execute `git commit`, `git push`, or create a Pull Request without explicit confirmation from the user.
-2. **Target Branch Awareness**:
-   - Active development branch is `development`. Base target for Pull Requests is `main`.
-3. **Scope Lock**:
+2. **Scope Lock Invariant**:
    - Limit code modifications strictly to the task requested. Avoid speculative refactoring or style churn outside the feature scope.
+
