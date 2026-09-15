@@ -8,6 +8,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: read
@@ -66,6 +70,12 @@ jobs:
       - name: Test
         if: steps.filter.outputs.backend == 'true'
         run: go test ./... -race -count=1
+
+      - name: Security audit (govulncheck)
+        if: steps.filter.outputs.backend == 'true'
+        env:
+          GOTOOLCHAIN: auto
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
       - name: Build server binary artifact
         if: steps.filter.outputs.backend == 'true'
