@@ -19,9 +19,11 @@ type Metrics struct {
 	httpRequestsMu sync.Mutex
 	httpRequests   map[string]*atomic.Int64
 
-	httpErrors atomic.Int64
-	reqSumMs   atomic.Int64
-	reqCount   atomic.Int64
+	httpErrors    atomic.Int64
+	http4xxErrors atomic.Int64
+	http5xxErrors atomic.Int64
+	reqSumMs      atomic.Int64
+	reqCount      atomic.Int64
 
 	fetchCycles       atomic.Int64
 	fetchCyclesFailed atomic.Int64
@@ -49,7 +51,11 @@ func (m *Metrics) HTTPRequest(method string, status int) {
 	}
 	m.httpRequestsMu.Unlock()
 	c.Add(1)
-	if status >= 400 {
+	if status >= 500 {
+		m.http5xxErrors.Add(1)
+		m.httpErrors.Add(1)
+	} else if status >= 400 {
+		m.http4xxErrors.Add(1)
 		m.httpErrors.Add(1)
 	}
 }
@@ -89,13 +95,16 @@ func (m *Metrics) AICall(failed bool) {
 
 // Snapshot holds a point-in-time copy of metrics counters.
 type Snapshot struct {
-	HTTPRequestsTotal int64   `json:"http_requests_total"`
-	HTTPErrorsTotal   int64   `json:"http_errors_total"`
-	HTTPAvgLatencyMs  float64 `json:"http_avg_latency_ms"`
-	FetchCyclesTotal  int64   `json:"fetch_cycles_total"`
-	FetchCyclesFailed int64   `json:"fetch_cycles_failed"`
-	AICallsTotal      int64   `json:"ai_calls_total"`
-	AICallsFailed     int64   `json:"ai_calls_failed"`
+	HTTPRequestsTotal int64            `json:"http_requests_total"`
+	HTTPErrorsTotal   int64            `json:"http_errors_total"`
+	HTTP4xxTotal      int64            `json:"http_4xx_total"`
+	HTTP5xxTotal      int64            `json:"http_5xx_total"`
+	HTTPStatusCodes   map[string]int64 `json:"http_status_codes"`
+	HTTPAvgLatencyMs  float64          `json:"http_avg_latency_ms"`
+	FetchCyclesTotal  int64            `json:"fetch_cycles_total"`
+	FetchCyclesFailed int64            `json:"fetch_cycles_failed"`
+	AICallsTotal      int64            `json:"ai_calls_total"`
+	AICallsFailed     int64            `json:"ai_calls_failed"`
 }
 
 // Snapshot returns a structured copy of the current metrics.
@@ -104,9 +113,15 @@ func (m *Metrics) Snapshot() Snapshot {
 		return Snapshot{}
 	}
 	var totalReqs int64
+	statusCodes := make(map[string]int64)
 	m.httpRequestsMu.Lock()
-	for _, c := range m.httpRequests {
-		totalReqs += c.Load()
+	for k, c := range m.httpRequests {
+		count := c.Load()
+		totalReqs += count
+		parts := strings.SplitN(k, "|", 2)
+		if len(parts) == 2 {
+			statusCodes[parts[1]] += count
+		}
 	}
 	m.httpRequestsMu.Unlock()
 
@@ -119,6 +134,9 @@ func (m *Metrics) Snapshot() Snapshot {
 	return Snapshot{
 		HTTPRequestsTotal: totalReqs,
 		HTTPErrorsTotal:   m.httpErrors.Load(),
+		HTTP4xxTotal:      m.http4xxErrors.Load(),
+		HTTP5xxTotal:      m.http5xxErrors.Load(),
+		HTTPStatusCodes:   statusCodes,
 		HTTPAvgLatencyMs:  avgLatency,
 		FetchCyclesTotal:  m.fetchCycles.Load(),
 		FetchCyclesFailed: m.fetchCyclesFailed.Load(),
@@ -163,6 +181,14 @@ func (m *Metrics) WritePrometheus(w io.Writer) {
 	fmt.Fprintln(w, "# HELP neuralwire_http_errors_total Total HTTP responses with status >= 400.")
 	fmt.Fprintln(w, "# TYPE neuralwire_http_errors_total counter")
 	fmt.Fprintf(w, "neuralwire_http_errors_total %d\n", m.httpErrors.Load())
+
+	fmt.Fprintln(w, "# HELP neuralwire_http_4xx_errors_total Total HTTP responses with status 4xx.")
+	fmt.Fprintln(w, "# TYPE neuralwire_http_4xx_errors_total counter")
+	fmt.Fprintf(w, "neuralwire_http_4xx_errors_total %d\n", m.http4xxErrors.Load())
+
+	fmt.Fprintln(w, "# HELP neuralwire_http_5xx_errors_total Total HTTP responses with status 5xx.")
+	fmt.Fprintln(w, "# TYPE neuralwire_http_5xx_errors_total counter")
+	fmt.Fprintf(w, "neuralwire_http_5xx_errors_total %d\n", m.http5xxErrors.Load())
 
 	fmt.Fprintln(w, "# HELP neuralwire_http_request_duration_seconds HTTP request latency.")
 	fmt.Fprintln(w, "# TYPE neuralwire_http_request_duration_seconds summary")
