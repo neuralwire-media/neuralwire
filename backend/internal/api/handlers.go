@@ -1244,23 +1244,29 @@ type adminAnalyticsResponse struct {
 		RejectedCount        int64                        `json:"rejected_count"`
 		CategoryDistribution []repository.CategoryCount   `json:"category_distribution"`
 		ScoreDistribution    repository.ScoreDistribution `json:"score_distribution"`
+		Funnel               repository.PipelineFunnel    `json:"funnel"`
 	} `json:"content"`
 	System struct {
-		UptimeSeconds     int64            `json:"uptime_seconds"`
-		HTTPRequestsTotal int64            `json:"http_requests_total"`
-		HTTPErrorsTotal   int64            `json:"http_errors_total"`
-		HTTP4xxTotal      int64            `json:"http_4xx_total"`
-		HTTP5xxTotal      int64            `json:"http_5xx_total"`
-		HTTPStatusCodes   map[string]int64 `json:"http_status_codes"`
-		HTTPAvgLatencyMs  float64          `json:"http_avg_latency_ms"`
-		FetchCyclesTotal  int64            `json:"fetch_cycles_total"`
-		FetchCyclesFailed int64            `json:"fetch_cycles_failed"`
-		AICallsTotal      int64            `json:"ai_calls_total"`
-		AICallsFailed     int64            `json:"ai_calls_failed"`
-		MemoryAllocMB     float64          `json:"memory_alloc_mb"`
-		MemorySysMB       float64          `json:"memory_sys_mb"`
-		NumGoroutines     int              `json:"num_goroutines"`
+		UptimeSeconds      int64            `json:"uptime_seconds"`
+		HTTPRequestsTotal  int64            `json:"http_requests_total"`
+		HTTPErrorsTotal    int64            `json:"http_errors_total"`
+		HTTP4xxTotal       int64            `json:"http_4xx_total"`
+		HTTP5xxTotal       int64            `json:"http_5xx_total"`
+		HTTPStatusCodes    map[string]int64 `json:"http_status_codes"`
+		HTTPAvgLatencyMs   float64          `json:"http_avg_latency_ms"`
+		FetchCyclesTotal   int64            `json:"fetch_cycles_total"`
+		FetchCyclesFailed  int64            `json:"fetch_cycles_failed"`
+		AICallsTotal       int64            `json:"ai_calls_total"`
+		AICallsFailed      int64            `json:"ai_calls_failed"`
+		AIPromptTokens     int64            `json:"ai_prompt_tokens"`
+		AICompletionTokens int64            `json:"ai_completion_tokens"`
+		AITotalTokens      int64            `json:"ai_total_tokens"`
+		AITokensByModel    map[string]int64 `json:"ai_tokens_by_model"`
+		MemoryAllocMB      float64          `json:"memory_alloc_mb"`
+		MemorySysMB        float64          `json:"memory_sys_mb"`
+		NumGoroutines      int              `json:"num_goroutines"`
 	} `json:"system"`
+	Sources []models.RSSSource `json:"sources,omitempty"`
 }
 
 func (s *Server) handleAdminAnalytics(w http.ResponseWriter, r *http.Request) {
@@ -1285,6 +1291,7 @@ func (s *Server) handleAdminAnalytics(w http.ResponseWriter, r *http.Request) {
 	resp.Content.RejectedCount = data.RejectedCount
 	resp.Content.CategoryDistribution = data.CategoryDistribution
 	resp.Content.ScoreDistribution = data.ScoreDistribution
+	resp.Content.Funnel = data.Funnel
 
 	resp.System.UptimeSeconds = int64(time.Since(s.startTime).Seconds())
 	resp.System.HTTPRequestsTotal = snap.HTTPRequestsTotal
@@ -1297,9 +1304,19 @@ func (s *Server) handleAdminAnalytics(w http.ResponseWriter, r *http.Request) {
 	resp.System.FetchCyclesFailed = snap.FetchCyclesFailed
 	resp.System.AICallsTotal = snap.AICallsTotal
 	resp.System.AICallsFailed = snap.AICallsFailed
+	resp.System.AIPromptTokens = snap.AIPromptTokens
+	resp.System.AICompletionTokens = snap.AICompletionTokens
+	resp.System.AITotalTokens = snap.AITotalTokens
+	resp.System.AITokensByModel = snap.AITokensByModel
 	resp.System.MemoryAllocMB = math.Round(float64(m.Alloc)/1024/1024*100) / 100
 	resp.System.MemorySysMB = math.Round(float64(m.Sys)/1024/1024*100) / 100
 	resp.System.NumGoroutines = runtime.NumGoroutine()
+
+	if s.sourceRepo != nil {
+		if srcs, err := s.sourceRepo.ListAll(); err == nil {
+			resp.Sources = srcs
+		}
+	}
 
 	s.writeJSON(w, http.StatusOK, resp)
 }

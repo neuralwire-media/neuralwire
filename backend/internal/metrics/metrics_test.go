@@ -28,6 +28,10 @@ func TestMetricsTrackingAndSnapshot(t *testing.T) {
 	m.AICall(false)
 	m.AICall(true)
 
+	m.AITokens(120, 80, 200, "gpt-4o")
+	m.AITokens(300, 150, 450, "gpt-4o")
+	m.AITokens(50, 50, 100, "deepseek-chat")
+
 	snap := m.Snapshot()
 
 	if snap.HTTPRequestsTotal != 8 {
@@ -63,6 +67,21 @@ func TestMetricsTrackingAndSnapshot(t *testing.T) {
 	if snap.AICallsTotal != 2 || snap.AICallsFailed != 1 {
 		t.Errorf("AICalls = %d/%d, want 2/1", snap.AICallsTotal, snap.AICallsFailed)
 	}
+	if snap.AIPromptTokens != 470 {
+		t.Errorf("AIPromptTokens = %d, want 470", snap.AIPromptTokens)
+	}
+	if snap.AICompletionTokens != 280 {
+		t.Errorf("AICompletionTokens = %d, want 280", snap.AICompletionTokens)
+	}
+	if snap.AITotalTokens != 750 {
+		t.Errorf("AITotalTokens = %d, want 750", snap.AITotalTokens)
+	}
+	if snap.AITokensByModel["gpt-4o"] != 650 {
+		t.Errorf("AITokensByModel[gpt-4o] = %d, want 650", snap.AITokensByModel["gpt-4o"])
+	}
+	if snap.AITokensByModel["deepseek-chat"] != 100 {
+		t.Errorf("AITokensByModel[deepseek-chat] = %d, want 100", snap.AITokensByModel["deepseek-chat"])
+	}
 
 	var buf bytes.Buffer
 	m.WritePrometheus(&buf)
@@ -77,6 +96,9 @@ func TestMetricsTrackingAndSnapshot(t *testing.T) {
 	if !strings.Contains(out, "neuralwire_http_errors_total 5") {
 		t.Errorf("missing or incorrect total errors in Prometheus output:\n%s", out)
 	}
+	if !strings.Contains(out, "neuralwire_ai_tokens_total 750") {
+		t.Errorf("missing or incorrect ai tokens in Prometheus output:\n%s", out)
+	}
 }
 
 func TestMetricsNilSafety(t *testing.T) {
@@ -85,6 +107,7 @@ func TestMetricsNilSafety(t *testing.T) {
 	m.RequestDuration(5)
 	m.FetchCycle(false)
 	m.AICall(false)
+	m.AITokens(10, 20, 30, "gpt-4o")
 
 	snap := m.Snapshot()
 	if snap.HTTPRequestsTotal != 0 {
