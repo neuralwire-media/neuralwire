@@ -138,6 +138,81 @@ func (s *Server) handleSitemap(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(b.String()))
 }
 
+// handleRSS renders an RSS 2.0 XML feed of the latest published articles.
+// It serves up to 50 latest published articles, formatted with standard RSS 2.0
+// fields (title, link, guid, description, enclosure, pubDate, category) for
+// feed readers (Feedly, Apple News, NetNewsWire), Google News discovery, and SEO.
+func (s *Server) handleRSS(w http.ResponseWriter, r *http.Request) {
+	origin := s.sitemapOrigin(r)
+
+	// Fetch up to 50 latest published articles.
+	articles, _, err := s.newsRepo.ListPublished("", "", 1, 50)
+	if err != nil {
+		s.slog.Error("api: rss news", "error", err)
+		s.writeError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
+	b.WriteString(`<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">` + "\n")
+	b.WriteString("  <channel>\n")
+	b.WriteString("    <title>NeuralWire — AI News, Neural Networks &amp; Future Computation</title>\n")
+	b.WriteString("    <link>" + xmlEscape(origin) + "</link>\n")
+	b.WriteString("    <description>Curated intelligence on frontier AI research, neural networks, machine learning, and computational industry.</description>\n")
+	b.WriteString("    <language>en-us</language>\n")
+
+	buildDate := time.Now().UTC().Format(time.RFC1123Z)
+	if len(articles) > 0 && articles[0].PublishedAt != nil {
+		buildDate = articles[0].PublishedAt.UTC().Format(time.RFC1123Z)
+	}
+	b.WriteString("    <lastBuildDate>" + buildDate + "</lastBuildDate>\n")
+	b.WriteString(`    <atom:link href="` + xmlEscape(origin+"/rss.xml") + `" rel="self" type="application/rss+xml" />` + "\n")
+
+	for _, a := range articles {
+		b.WriteString("    <item>\n")
+		b.WriteString("      <title>" + xmlEscape(a.Title) + "</title>\n")
+		articleLink := origin + "/" + a.Slug
+		b.WriteString("      <link>" + xmlEscape(articleLink) + "</link>\n")
+		b.WriteString(`      <guid isPermaLink="true">` + xmlEscape(articleLink) + "</guid>\n")
+		if a.Summary != "" {
+			b.WriteString("      <description>" + xmlEscape(a.Summary) + "</description>\n")
+		} else if a.Content != "" {
+			b.WriteString("      <description>" + xmlEscape(a.Content) + "</description>\n")
+		}
+		if a.Category != "" {
+			b.WriteString("      <category>" + xmlEscape(a.Category) + "</category>\n")
+		}
+		if a.PublishedAt != nil {
+			b.WriteString("      <pubDate>" + a.PublishedAt.UTC().Format(time.RFC1123Z) + "</pubDate>\n")
+		}
+		if a.ImageURL != "" {
+			imgURL := a.ImageURL
+			if strings.HasPrefix(imgURL, "/") {
+				imgURL = origin + imgURL
+			}
+			mimeType := "image/jpeg"
+			lowerImg := strings.ToLower(imgURL)
+			if strings.HasSuffix(lowerImg, ".png") {
+				mimeType = "image/png"
+			} else if strings.HasSuffix(lowerImg, ".webp") {
+				mimeType = "image/webp"
+			} else if strings.HasSuffix(lowerImg, ".gif") {
+				mimeType = "image/gif"
+			}
+			b.WriteString(`      <enclosure url="` + xmlEscape(imgURL) + `" type="` + mimeType + `" length="0" />` + "\n")
+		}
+		b.WriteString("    </item>\n")
+	}
+
+	b.WriteString("  </channel>\n")
+	b.WriteString("</rss>\n")
+
+	w.Header().Set("Content-Type", "application/rss+xml; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=1800")
+	_, _ = w.Write([]byte(b.String()))
+}
+
 // xmlEscape escapes the five XML special characters in a string.
 func xmlEscape(s string) string {
 	replacer := strings.NewReplacer(
