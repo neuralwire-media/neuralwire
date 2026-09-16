@@ -1,386 +1,209 @@
 # Neuralwire Backend
 
-Go REST API backend for the **Neuralwire** AI news website (global audience,
-English by default).
+Go REST API backend for the **Neuralwire** AI news website (global audience, English by default).
 
 ## Features
 
-- REST API on port `8080`
-- SQLite storage (pure-Go driver, no CGO required)
-- RSS feed fetcher for 14 AI sources (OpenAI, Google AI, Anthropic, Meta AI,
-  DeepMind, Hugging Face, AWS ML, GitHub, MIT AI, arXiv, TechCrunch AI,
-  VentureBeat AI, The Verge AI, Machine Learning Mastery)
-- **Manual RSS ingestion** (no background scheduler): trigger a fetch cycle
-  with `POST /api/admin/fetch`; fetched articles land as **drafts** in a
-  semi-automatic moderation workflow
-- **Curator model**: the scraper reads the full article only as material for
-  the AI summary, then discards it. Original full text is **never stored or
-  republished**, keeping the site safe from copyright issues. Readers are
-  directed to the source via the article URL.
-- AI summaries, categorization and news-value scoring via any
-  OpenAI-compatible API (works with reasoning models such as DeepSeek);
-  graceful fallbacks when the API is unavailable
-- **AI value scoring (Level 2)**: every draft is rated 0-100 by a weighted
-  blend of AI judgment and deterministic heuristics, labelled HIGH/MEDIUM/LOW
-  with a sub-score breakdown, confidence, advisory recommendation and reason.
-  Scoring is advisory only — it **never auto-publishes**; admins stay the
-  final decision makers.
-- **Admin-configurable scoring thresholds** persisted in `app_settings`
-  (defaults: LOW <60, MEDIUM 60–79, HIGH ≥80) via `GET/PUT /api/admin/settings`
-- Live fetch progress (`GET /api/admin/fetch/progress`) that survives page
-  refreshes, plus **cancel in-flight fetch** (`POST /api/admin/fetch/cancel`)
-- Cover images are upgraded to high-resolution CDN variants (Contentful,
-  imgix, Cloudinary, Unsplash, Google, WordPress) so heroes render sharply
-- **Trending / most-read ranking**: public `POST /api/news/{id}/view` records
-  article reads (deduplicated per visitor via `viewer_key` + 6h cooldown) and
-  `GET /api/news/trending?window=day|week|all&limit=N` returns the most-read
-  published articles with view counts
-- CORS enabled for `http://localhost:5173` and `http://127.0.0.1:5173` (SvelteKit dev server)
-- **Security headers** on every response: `X-Content-Type-Options: nosniff`,
-  `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, and a
-  permissive-for-images `Content-Security-Policy` (anti-XSS/clickjacking)
-- **CSRF protection** on admin mutations: state-changing admin requests with a
-  browser `Origin` header must come from an allowed origin; non-browser
-  clients (no Origin) are allowed since they still need the bearer token
-- Admin API protected by simple bearer-token auth (`POST /api/admin/login`)
-- **Response compression** (gzip/brotli) with per-route `Cache-Control`
-  headers and **ETag conditional requests**: JSON/text payloads are compressed
-  for clients that advertise `Accept-Encoding`, `/api/news/trending` is cached
-  `max-age=60`, static assets are cached long-term, and successful GETs can be
-  revalidated with `If-None-Match` (304 Not Modified)
-- **Structured logging** (Go `slog`): every HTTP request is logged with
-  method, path, status, duration, and client IP; fetch cycles, AI calls, and
-  errors log structured key=value fields. `LOG_LEVEL` filters output and
-  `LOG_FORMAT=json` emits JSON lines for log aggregation. Request bodies and
-  bearer tokens are never logged
-- **Health & metrics**: `GET /api/health` (and `/api/healthz` alias) ping the
-  database and return `200`/`503` for load balancer health checks;
-  `GET /api/metrics` exposes Prometheus counters (requests by method/status,
-  error count, latency sum/count, fetch cycles, AI calls). Both endpoints are
-  exempt from rate limiting and never cached
-- **Database indexes** covering the hot paths: `news(url)` (per-item dedup
-  during fetch), `news(status, created_at)` (admin list), `news(category,
-  status, published_at)` (public category list), and
-  `article_views(news_id, viewer_key, created_at)` (view dedup). Verified
-  with `EXPLAIN QUERY PLAN` — hot queries use covering indexes
-- **Production readiness**: optional static serving of the built frontend
-  (`STATIC_DIR` → adapter-static `build/`, SPA fallback to `index.html`),
-  plus a multi-stage `Dockerfile` and `docker-compose.yml` that build the
-  frontend, compile the backend, and run both from one minimal non-root
-  container with a health check
-- **Admin image uploads**: `POST /api/admin/upload-image` accepts an image
-  (jpeg/png/webp/gif, ≤ 5 MiB), stores it under `UPLOAD_DIR` with a random
-  name, and serves it at `/uploads/...`. In the Docker image `UPLOAD_DIR`
-  points at the persistent volume so uploaded images survive redeploys
-- **Database backups**: automatic gzip snapshot at startup then every
-  `BACKUP_INTERVAL_HOURS` (default 24h), kept under `BACKUP_DIR` with
-  `BACKUP_RETENTION` (default 7). Admin can also download a backup on demand
-  via `GET /api/admin/backup`
+- **Standard Library Go 1.25+ REST API** on port `8080` (Go 1.22+ routing patterns, zero heavy web frameworks).
+- **SQLite Storage**: Pure-Go driver (`modernc.org/sqlite`), zero CGO required, running in WAL mode with robust database migrations.
+- **25 Default Curated RSS Sources**: Pre-seeded across 5 core categories (AI, Tools, Research, Industry, Machine Learning).
+- **Dynamic RSS Source Management**: Add, update, toggle, delete, and test feed URLs in real time via `/api/admin/sources`.
+- **Curator Model**: The scraper reads full article text only as material for the AI summary and value scoring, then discards it. Original full text is **never stored or republished**, keeping the site compliant with fair use and directing traffic to original publishers.
+- **AI Summaries & Categorization**: Compatible with any OpenAI-compliant API (OpenAI, Gemini, DeepSeek, Groq, Ollama) with robust deterministic fallbacks.
+- **Level 2 AI Value Scoring**: Every draft is rated 0–100 by a weighted blend of AI judgment ($60\%$) and deterministic heuristics ($40\%$), labelled HIGH/MEDIUM/LOW with sub-score breakdowns, confidence metrics, and advisory reasons. Scoring is advisory only and never auto-publishes without explicit scheduler configuration.
+- **Admin-Configurable Scoring Thresholds**: Persisted in database `app_settings` (defaults: LOW <60, MEDIUM 60–79, HIGH $\ge$80) via `GET/PUT /api/admin/settings`.
+- **Automated Ingestion & Autopublish Scheduler**: Optional timer scheduler configured via `GET/PUT /api/admin/autopublish` with category whitelists, score label filters, max posts per cycle, and independent start/stop controllers (`/api/admin/autopublish/start` and `/stop`).
+- **Live Fetch Control**: Real-time progress tracking (`GET /api/admin/fetch/progress`) and in-flight fetch cancellation (`POST /api/admin/fetch/cancel`).
+- **Cover Image Upgrades & Admin Uploads**: Low-res thumbnails from known CDNs (Contentful, imgix, Cloudinary, Unsplash, Google, WordPress) are automatically upgraded to high-resolution variants. Admins can also upload custom cover images (`POST /api/admin/upload-image`, $\le 5$ MiB) stored under `UPLOAD_DIR` and served at `/uploads/`.
+- **Trending / Most-Read Ranking**: Public `POST /api/news/{id}/view` records reads (deduplicated per visitor via `viewer_key` + 6-hour cooldown) and `GET /api/news/trending?window=day|week|all&limit=N` returns top articles with view counts.
+- **Dynamic Sitemap & Robots.txt**: `/sitemap.xml` and `/robots.txt` are served dynamically from published database records.
+- **Analytics Endpoint**: `GET /api/admin/analytics` aggregates total views, published counts, draft pipelines, category distributions, and top articles.
+- **Automated Database Backups**: Gzip snapshot on boot and every `BACKUP_INTERVAL_HOURS` (default 24h) under `BACKUP_DIR` with `BACKUP_RETENTION` (default 7). Admins can also download on-demand snapshots via `GET /api/admin/backup`.
+- **Security & Hardening**:
+  - Constant-time HMAC-SHA256 bearer token authentication.
+  - CSRF origin validation on all state-changing admin mutations.
+  - SSRF protection via `netutil.SafeHTTPClient` blocking loopback, private, link-local, and multicast IP ranges.
+  - Security headers on every response: CSP, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy`, `Referrer-Policy`, and `Permissions-Policy`.
+  - Rate limiting: Login brute-force limiter, view abuse limiter, and global anti-scan limiter.
+  - Memory DoS prevention: Request bodies limited via `http.MaxBytesReader`.
+- **Structured Logging & Observability**: Go `log/slog` structured logging (JSON or text) with log-level filtering. Prometheus metrics exposed at `/api/metrics` (requests, status codes, latencies, AI calls, fetch stats) and `/api/healthz` health checks.
+- **Response Compression & ETag Revalidation**: Gzip/brotli compression for text/JSON payloads and ETag conditional revalidation (304 Not Modified).
+
+---
 
 ## Requirements
 
-- Go 1.25+ (newer toolchains are downloaded automatically when using the
-  standard toolchain settings)
+- **Go 1.25+** (newer toolchains are downloaded automatically when using `GOTOOLCHAIN=auto`).
 
-## Quick start
+---
+
+## Quick Start
 
 ```bash
 cd backend
-go build -o bin/server ./cmd/server
-./bin/server
+cp .env.example .env
+
+# Build and start server
+make run
+# or directly:
+go run ./cmd/server
 ```
 
-The server listens on `http://localhost:8080` and creates `data/neuralwire.db`
-on first run. RSS ingestion is **manual**: there is no automatic fetching or
-cron scheduler, so restarts never flood the drafts table. Trigger a fetch
-cycle with `POST /api/admin/fetch` (see below).
+The server listens on `http://localhost:8080` and initializes `data/neuralwire.db` automatically on first run.
 
-## Environment variables
+---
 
-| Variable             | Default                       | Description                                          |
-| -------------------- | ----------------------------- | ---------------------------------------------------- |
-| `PORT`               | `8080`                        | HTTP listen port                                     |
-| `APP_ENV`            | `development`                 | Runtime environment. In `production`, startup refuses default admin credentials or the dev token secret |
-| `TRUST_PROXY`        | `false`                       | Trust `X-Forwarded-For` for client IP (enable only behind a trusted reverse proxy; otherwise spoofable) |
-| `DB_PATH`            | `data/neuralwire.db`          | SQLite database file path                            |
-| `USER_AGENT`         | `Mozilla/5.0 (compatible; NeuralwireBot/1.0-dev; +https://neuralwire.example)` | User-Agent for outbound RSS/scrape requests; set a real bot UA + domain before going public |
-| `STATIC_DIR`         | `../frontend/build`           | Path to the built frontend (adapter-static output). When it exists, the server serves the SPA (fallback to `index.html`) so frontend + API run from one process |
-| `CORS_ALLOW_ORIGIN`  | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated allowed frontend origins |
-| `AI_SUMMARY_API_KEY` | *(empty)*                     | API key for the OpenAI-compatible summary endpoint   |
-| `AI_SUMMARY_PROVIDER`| `openai`                      | Preset: `openai`, `gemini`, `openrouter`, `groq`, `ollama` |
-| `AI_SUMMARY_MODEL`   | `gpt-4o-mini`                 | Model used for summaries                             |
-| `AI_SUMMARY_BASE_URL`| `https://api.openai.com/v1`   | OpenAI-compatible API base URL                       |
-| `SCRAPE_MAX_PER_SOURCE` | `5`                        | Newest articles scraped per source per cycle         |
-| `SCRAPE_MAX_INSERT_PER_SOURCE` | `5`               | Hard cap on new drafts stored per source per cycle (scraped or fallback alike) |
-| `SCRAPE_TIMEOUT_SECONDS` | `15`                      | Per-article scrape timeout (seconds)                 |
-| `SCRAPE_DELAY_MIN_SECONDS` | `1`                     | Lower bound of the random politeness delay (seconds) between external requests |
-| `SCRAPE_DELAY_MAX_SECONDS` | `2`                     | Upper bound of the random politeness delay (seconds) between external requests |
-| `SCRAPE_MIN_CONTENT_CHARS` | `500`                    | Minimum content length for a fetched draft; shorter articles are skipped as low quality |
-| `VIEW_RATE_LIMIT` | `30`                     | Per-IP rate limit (per minute) for `POST /api/news/{id}/view`; `<=0` disables |
-| `TRENDING_CACHE_TTL_SECONDS` | `300`               | Cache TTL (seconds) for trending results; `<=0` disables |
-| `LOGIN_RATE_LIMIT` | `5`                       | Per-IP login attempts per minute (anti brute force); `<=0` disables |
-| `GLOBAL_RATE_LIMIT` | `120`                    | Per-IP requests per minute for every endpoint (anti scan/bot); `<=0` disables |
-| `HTTP_COMPRESSION_ENABLED` | `true`                | Enable gzip/brotli response compression for JSON/text payloads; set `false` to disable |
-| `LOG_LEVEL` | `info`                    | Minimum structured log level: `debug`, `info`, `warn` or `error` |
-| `LOG_FORMAT` | `text`                  | Structured log format: `text` (default) or `json` for production log aggregation |
-| `ADMIN_USERNAME`     | `admin`                       | Admin login username                                 |
-| `ADMIN_PASSWORD`     | `admin123`                    | Admin login password. **Change it outside development** |
-| `ADMIN_TOKEN_SECRET` | dev value (see `.env.example`) | HMAC secret signing admin bearer tokens. **Change it outside development** |
+## Environment Variables
 
-Without `AI_SUMMARY_API_KEY`, articles fall back to deterministic summaries,
-categories and heuristic value scores, so the pipeline still produces
-reviewable drafts.
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `8080` | HTTP listen port |
+| `APP_ENV` | `development` | Runtime environment (`production` enforces security hardening) |
+| `TRUST_PROXY` | `false` | Trust `X-Forwarded-For` header (enable only behind trusted reverse proxies like Caddy/Nginx) |
+| `DB_PATH` | `data/neuralwire.db` | SQLite database file location |
+| `USER_AGENT` | `Mozilla/5.0 (compatible; NeuralwireBot/1.0-dev; +https://neuralwire.example)` | User-Agent header sent on outbound requests |
+| `STATIC_DIR` | `../frontend/build` | Static frontend directory served at `/` (SPA fallback to `index.html`) |
+| `UPLOAD_DIR` | `./data/uploads` | Storage directory for admin-uploaded images (served at `/uploads/`) |
+| `BACKUP_DIR` | `./data/backups` | Storage directory for automated database gzip snapshots |
+| `BACKUP_RETENTION` | `7` | Number of backup snapshots retained |
+| `BACKUP_INTERVAL_HOURS` | `24` | Backup frequency in hours (0 disables automated backup) |
+| `CORS_ALLOW_ORIGIN` | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated allowed CORS origins |
+| `ADMIN_USERNAME` | `admin` | Admin username |
+| `ADMIN_PASSWORD` | `admin123` | Admin password (**must be changed in production**) |
+| `ADMIN_TOKEN_SECRET` | *(dev secret)* | HMAC key for admin bearer tokens (**must be changed in production**) |
+| `AI_SUMMARY_API_KEY` | *(empty)* | OpenAI-compatible API key for summarization & scoring |
+| `AI_SUMMARY_PROVIDER` | `openai` | Provider preset: `openai`, `gemini`, `openrouter`, `groq`, `ollama` |
+| `AI_SUMMARY_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible base URL |
+| `AI_SUMMARY_MODEL` | `gpt-4o-mini` | AI model used for summaries and value scoring |
+| `AI_IMAGE_GENERATION_ENABLED` | *(auto)* | Enable/disable AI cover image generation |
+| `SCRAPE_MAX_PER_SOURCE` | `5` | Maximum newest articles scraped per source per cycle |
+| `SCRAPE_MAX_INSERT_PER_SOURCE` | `5` | Maximum new drafts stored per source per cycle |
+| `SCRAPE_TIMEOUT_SECONDS` | `15` | Per-article scraper timeout |
+| `SCRAPE_MIN_CONTENT_CHARS` | `500` | Minimum article character count required to keep draft |
+| `SCRAPE_DELAY_MIN_SECONDS` | `1` | Minimum politeness delay before external requests |
+| `SCRAPE_DELAY_MAX_SECONDS` | `2` | Maximum politeness delay before external requests |
+| `VIEW_RATE_LIMIT` | `30` | Max view tracking requests per IP per minute (0 = disabled) |
+| `TRENDING_CACHE_TTL_SECONDS` | `300` | Memory cache TTL for trending query in seconds |
+| `LOGIN_RATE_LIMIT` | `5` | Max login attempts per IP per minute (0 = disabled) |
+| `GLOBAL_RATE_LIMIT` | `120` | Max requests per IP per minute for all endpoints (0 = disabled) |
+| `HTTP_COMPRESSION_ENABLED` | `true` | Enable gzip/brotli response compression |
+| `LOG_LEVEL` | `info` | Minimum log level: `debug`, `info`, `warn`, `error` |
+| `LOG_FORMAT` | `text` | Structured log output format: `text` or `json` |
 
-## How ingestion works (curator model)
+---
 
-By default there is **no background scheduler** — fetching only happens when an
-authenticated admin calls `POST /api/admin/fetch`, which runs one fetch cycle
-across all sources and returns per-source statistics:
+## How Ingestion Works (Curator Model)
 
-```json
-{
-  "total_new": 3,
-  "scraped": 2,
-  "fallback": 1,
-  "skipped_low_quality": 10,
-  "sources": [
-    { "name": "OpenAI Blog", "inserted": 2, "scraped": 2, "fallback": 0, "skipped_low_quality": 0 },
-    { "name": "Reddit r/artificial", "inserted": 1, "scraped": 0, "fallback": 1, "skipped_low_quality": 0 }
-  ]
-}
-```
+By default, there is **no background scheduler running** unless explicitly configured — fetching happens when an authenticated admin calls `POST /api/admin/fetch`:
 
-### Auto fetch & auto publish (optional scheduler)
+1. **Polite Crawling**: Waits a random 1–2 second delay before outbound requests to avoid rate limits on source servers.
+2. **Readability Scraping**: Extracts clean article body text using `codeberg.org/readeck/go-readability/v2`, stripping ads, navigations, and widgets.
+3. **Curator Extraction**: Scraped text is used **only** to generate summaries, classifications, and value scores. Original full text is **discarded** and never stored.
+4. **Quality Gate**: Articles with content shorter than `SCRAPE_MIN_CONTENT_CHARS` (500 chars) are dropped to filter out stub articles.
+5. **Budgets & Caps**: Maximum 5 articles scraped and maximum 5 drafts inserted per source per cycle.
+6. **Image Enhancement**: First usable article image is extracted and CDN URLs are upgraded to high-resolution variants.
+7. **Value Scoring**: Evaluated via `scoring.ScoreService` ($0.6 \times \text{AI score} + 0.4 \times \text{Heuristic score}$) and assigned HIGH/MEDIUM/LOW badges based on configurable thresholds.
 
-By default fetching is manual (see above). An optional scheduler can fetch on
-a timer and optionally auto-publish qualifying drafts. It is configured via
-`GET/PUT /api/admin/autopublish` (admin panel UI on the frontend):
+---
+
+## Autopublish & Ingestion Scheduler
+
+The background scheduler can be configured via `GET/PUT /api/admin/autopublish`:
 
 ```json
 {
   "enabled": true,
   "auto_post_enabled": true,
   "interval_minutes": 360,
-  "categories": ["ai"],
-  "min_score_label": "high"
+  "categories": ["ai", "machine-learning"],
+  "min_score_labels": ["medium", "high"],
+  "max_posts_per_cycle": 5
 }
 ```
 
-- `enabled` — part of the stored configuration; the scheduler only runs when
-  it is true **and** the scheduler has been started (see below).
-- `auto_post_enabled` — additionally publish drafts that pass the filters.
-  When false, the scheduler only fetches (creates drafts for admin review).
-- `interval_minutes` — how often a cycle runs (minimum 5, default 360 = 6h).
-- `categories` — whitelist of categories eligible for auto-publish; empty = all.
-- `min_score_label` — legacy single minimum value label (`low`/`medium`/`high`);
-  kept for backward compatibility.
-- `min_score_labels` — whitelist of value labels to auto-publish (STY-60),
-  e.g. `["medium","high"]`. When set it takes precedence over
-  `min_score_label`; empty = any label.
-- `max_posts_per_cycle` — cap on how many drafts are auto-published in one
-  cycle (STY-60); 0 = unlimited.
-- `post_interval_minutes` — independent interval for the auto-post step
-  (STY-60); 0 = post on the same schedule as fetch.
+- **Scheduler Control Endpoints**:
+  - `POST /api/admin/autopublish/start` — Starts the timer scheduler.
+  - `POST /api/admin/autopublish/stop` — Stops the timer scheduler.
+  - `GET /api/admin/autopublish` — Returns configuration and live running status.
 
-**Saving the config does not start the scheduler.** Use the separate
-endpoints (admin "Start/Stop config" buttons):
+---
 
-- `POST /api/admin/autopublish/start` — activate the scheduler.
-- `POST /api/admin/autopublish/stop` — deactivate the scheduler.
-- `GET /api/admin/autopublish` returns `running` (whether the scheduler is
-  active) alongside the config.
+## API Reference
 
-The scheduler never publishes outside the filters; everything else stays a
-draft for admin review, preserving the curator model.
+All endpoints return JSON responses unless specified otherwise.
 
-RSS feeds only expose short excerpts, so each new article goes through a
-hybrid extraction:
+### Public Endpoints
 
-1. For the **newest N articles per source per cycle** (`SCRAPE_MAX_PER_SOURCE`,
-   default 5) it fetches the article URL and extracts the full readable body
-   with a readability algorithm (codeberg.org/readeck/go-readability/v2),
-   after stripping navigation, ads, sidebars and interactive widgets.
-   Before each external request (RSS feed fetch or article scrape) the
-   fetcher waits a random delay between `SCRAPE_DELAY_MIN_SECONDS` and
-   `SCRAPE_DELAY_MAX_SECONDS` (default 1–2s), so upstream sites see at most
-   one request per 1–2 seconds.
-2. The scraped body is used **only as material** for the AI summary,
-   categorization and value scoring. The original text is then discarded:
-   the stored article keeps a `summary` and an empty `content`. The site
-   never republishes original copyrighted text; each article links out to the
-   source via its URL.
-3. If scraping succeeds, the scraped title replaces the RSS title when it is
-   longer/more descriptive.
-4. If scraping fails, times out (`SCRAPE_TIMEOUT_SECONDS`, default 15s) or
-   the budget is exceeded, the article falls back to the RSS excerpt
-   (`item.Content` / `item.Description`) as summarize/scoring material.
-5. **Quality gate:** articles whose material is shorter than
-   `SCRAPE_MIN_CONTENT_CHARS` (default 500) are **not** stored as drafts;
-   they are logged as `skipped (low quality)`.
-6. **Per-source insert budget:** at most `SCRAPE_MAX_INSERT_PER_SOURCE`
-   (default 5) new drafts are stored per source per cycle, whether they came
-   from scraping or an RSS-excerpt fallback. The loop stops once the cap is
-   reached, so a single fetch cannot flood the drafts table even when RSS
-   excerpts are long.
-7. **Image extraction:** if the RSS feed provided no usable image, the first
-   `<img>` from the scraped HTML (already absolute) becomes `image_url`. Cover
-   URLs are passed through `UpgradeImageURL` so known CDNs (Contentful,
-   imgix, Cloudinary, Unsplash, Google, WordPress) return a high-resolution
-   variant instead of a small thumbnail (e.g. `?w=300&q=30` → `?w=1600&q=80&fm=webp`).
-8. **Value scoring:** each draft is rated by `scoring.ScoreService` —
-   `0.6 × AI score + 0.4 × heuristic score` — and labelled HIGH/MEDIUM/LOW
-   using the configurable thresholds. The AI supplies impact/novelty/quality
-   sub-scores, confidence, an advisory recommendation and a reason; when the
-   AI is unavailable the heuristic score is used with `method: "heuristic"`.
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/health` | Health check (DB ping) |
+| `GET` | `/api/healthz` | Health check alias |
+| `GET` | `/api/metrics` | Prometheus metrics counters |
+| `GET` | `/sitemap.xml` | Dynamic XML sitemap of all published articles |
+| `GET` | `/robots.txt` | Dynamic robots exclusion rules |
+| `GET` | `/api/news` | List published articles (`?category=`, `?q=`, `?page=`, `?page_size=`) |
+| `GET` | `/api/news/{id}` | Single published article by ID or slug |
+| `GET` | `/api/news/trending` | Most-read published articles (`?window=day\|week\|all`, `?limit=5`) |
+| `GET` | `/api/news/{id}/related` | Related articles ranked by similarity |
+| `POST` | `/api/news/{id}/view` | Record an article read (`{ "viewer_key": "..." }`) |
+| `GET` | `/api/categories` | List all available categories |
+| `POST` | `/api/admin/login` | Login with username and password, returns bearer token |
 
-The per-source log line reports the split, e.g.
-`fetcher: source "Google AI Blog" inserted 5 new draft(s) (scraped: 5, fallback: 0, skipped-low-quality: 0)`.
+### Admin Moderation Endpoints
 
-## Value scoring (Level 2 AI)
+All admin endpoints require `Authorization: Bearer <token>` and enforce CSRF protection on mutations.
 
-Every fetched draft is rated before it is stored. The pipeline in
-`internal/scoring`:
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/admin/news` | List articles across any status (`?status=draft\|published\|rejected`, `?value_label=`) |
+| `GET` | `/api/admin/news/{id}` | Get full article details |
+| `POST` | `/api/admin/news` | Create a new article manually |
+| `PUT` | `/api/admin/news/{id}` | Update article details |
+| `POST` | `/api/admin/news/{id}/publish` | Publish a draft article |
+| `POST` | `/api/admin/news/{id}/reject` | Move an article to rejected archive |
+| `POST` | `/api/admin/news/{id}/set-primary` | Toggle article as primary/featured story |
+| `POST` | `/api/admin/news/bulk` | Bulk action (`publish`, `reject`, `delete`) on an array of IDs |
+| `DELETE` | `/api/admin/news/{id}` | Delete an article permanently |
+| `DELETE` | `/api/admin/news` | Bulk delete all articles with a specific status (`?status=rejected`) |
+| `POST` | `/api/admin/fetch` | Manually trigger an RSS ingestion cycle |
+| `GET` | `/api/admin/fetch/progress` | Live progress of running fetch cycle |
+| `POST` | `/api/admin/fetch/cancel` | Abort an in-flight fetch cycle |
+| `GET` | `/api/admin/settings` | Get current value scoring thresholds |
+| `PUT` | `/api/admin/settings` | Update value scoring thresholds |
+| `GET` | `/api/admin/autopublish` | Get autopublish configuration and running state |
+| `PUT` | `/api/admin/autopublish` | Update autopublish configuration |
+| `POST` | `/api/admin/autopublish/start` | Start the autopublish background scheduler |
+| `POST` | `/api/admin/autopublish/stop` | Stop the autopublish background scheduler |
+| `POST` | `/api/admin/upload-image` | Upload custom cover image (multipart form, $\le 5$ MiB) |
+| `GET` | `/api/admin/backup` | Download SQLite database gzip snapshot |
+| `GET` | `/api/admin/sources` | List all configured RSS feeds |
+| `POST` | `/api/admin/sources` | Add a new RSS feed source |
+| `PUT` | `/api/admin/sources/{id}` | Update an existing RSS feed source |
+| `PATCH` | `/api/admin/sources/{id}/toggle` | Toggle RSS source enabled/disabled state |
+| `DELETE` | `/api/admin/sources/{id}` | Delete an RSS feed source |
+| `POST` | `/api/admin/sources/test` | Test and preview an RSS feed URL |
+| `GET` | `/api/admin/analytics` | Summary analytics for dashboard |
 
-1. **AI verdict** — `ai.ScoreValue` asks the model for `{score, impact,
-   novelty, quality, confidence, recommendation, reason}` as JSON. The
-   parser is tolerant (strips code fences, clamps ranges).
-2. **Heuristic fallback** — `scoring.RuleScorer` scores deterministically
-   from source authority, headline signals (launch/rumor keywords) and
-   evidence density (numbers, article length). Used when the AI is
-   unavailable, and always blended into the final score.
-3. **Weighted final score** — `0.6 × AI score + 0.4 × heuristic score`,
-   computed on the backend (never trusted wholesale to the model).
-4. **Label** — mapped to `HIGH` / `MEDIUM` / `LOW` using the thresholds from
-   `app_settings` (defaults LOW <60, MEDIUM 60–79, HIGH ≥80). Thresholds are
-   editable by admins via `GET/PUT /api/admin/settings` — never hardcoded.
-5. **Advisory only** — scoring attaches `value_score`, `value_breakdown`,
-   `value_confidence`, `value_recommendation`, `value_reason`,
-   `value_label`, `value_method` to a draft. It **never auto-publishes**;
-   admins review and decide in the admin panel.
+---
 
-## API
+## Verification & Development
 
-All endpoints return JSON. List endpoints use a `{ "data": [...], "pagination": {...} }`
-envelope.
-
-### Public
-
-| Method | Path                | Description                                        |
-| ------ | ------------------- | -------------------------------------------------- |
-| GET    | `/api/health`       | Liveness check                                     |
-| GET    | `/api/news`         | Published articles; `?category=`, `?q=` (title/summary keyword search, multi-word tokens matched with AND), `?page=`, `?page_size=` |
-| GET    | `/api/news/{id}`    | Single published article (404 if draft/rejected)   |
-| GET    | `/api/news/trending`| Most-read published articles; `?window=day\|week\|all` (default week), `?limit=` (default 5) |
-| POST   | `/api/news/{id}/view` | Record one read of an article; optional body `{viewer_key}` for per-visitor dedup |
-| GET    | `/api/categories`   | All categories                                     |
-
-### Admin (moderation workflow)
-
-**Authentication:** all `/api/admin/*` routes except `POST /api/admin/login`
-require an `Authorization: Bearer <token>` header. Obtain a token by logging
-in; tokens are HMAC-signed with `ADMIN_TOKEN_SECRET` and expire after 24h.
-
-| Method | Path                              | Description                       |
-| ------ | --------------------------------- | --------------------------------- |
-| POST   | `/api/admin/login`                | Login, returns `{token, token_type, expires_in}` |
-| POST   | `/api/admin/fetch`                | Manually trigger one RSS fetch cycle, returns fetch stats |
-| GET    | `/api/admin/fetch/progress`       | Live progress of the in-flight cycle `{running, done_sources, total_sources, percent, current_source}` |
-| POST   | `/api/admin/fetch/cancel`         | Abort the running fetch cycle (`cancelled: true/false`) |
-| GET    | `/api/admin/settings`             | Current scoring thresholds `{low_max, medium_min, medium_max, high_min}` |
-| PUT    | `/api/admin/settings`             | Update scoring thresholds (persisted in `app_settings`) |
-| GET    | `/api/admin/news`                 | All articles (any status); `?status=draft\|published\|rejected`, `?category=`, `?value_label=HIGH\|MEDIUM\|LOW`, `?page=`, `?page_size=` |
-| GET    | `/api/admin/news/{id}`            | Full article (including content) regardless of status |
-| POST   | `/api/admin/news`                 | Create a draft article            |
-| POST   | `/api/admin/news/{id}/publish`    | Publish a draft                   |
-| POST   | `/api/admin/news/{id}/reject`     | Reject a draft                    |
-| DELETE | `/api/admin/news/{id}`            | Delete an article                 |
-
-### Manual fetch example
+To verify the backend code before committing:
 
 ```bash
-TOKEN=$(curl -s -X POST http://localhost:8080/api/admin/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}' | jq -r .token)
+# Single-command verification shortcut:
+make verify
 
-curl -X POST http://localhost:8080/api/admin/fetch \
-  -H "Authorization: Bearer $TOKEN"
-# => {"total_new":3,"scraped":2,"fallback":1,"skipped_low_quality":10,"sources":[...]}
-```
+# Or manual step-by-step sequence:
+# 1. Format check
+gofmt -w . && gofmt -l .
 
-### Login example
+# 2. Static analysis
+go vet ./...
 
-```bash
-TOKEN=$(curl -s -X POST http://localhost:8080/api/admin/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}' | jq -r .token)
-```
+# 3. Test suite
+go test -count=1 -race -v ./...
 
-### Create draft example
-
-```bash
-curl -X POST http://localhost:8080/api/admin/news \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "OpenAI releases a new model",
-    "url": "https://openai.com/blog/new-model",
-    "source": "OpenAI Blog",
-    "category": "ai",
-    "summary": "OpenAI announced a new model today.",
-    "content": "Full article body...",
-    "image_url": "https://openai.com/cover.png"
-  }'
-```
-
-### Workflow example
-
-```bash
-# List published news (public, no auth)
-curl http://localhost:8080/api/news?category=ai&page=1&page_size=10
-
-# List all articles including drafts (admin)
-curl -H "Authorization: Bearer $TOKEN" \
-  "http://localhost:8080/api/admin/news?status=draft&page=1&page_size=20"
-
-# Get the full draft article (admin)
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/admin/news/{id}
-
-# Publish the draft created above (replace {id})
-curl -X POST -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8080/api/admin/news/{id}/publish
-
-# Reject instead
-curl -X POST -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8080/api/admin/news/{id}/reject
-
-# Delete
-curl -X DELETE -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8080/api/admin/news/{id}
-```
-
-## Project layout
-
-```
-backend/
-├── cmd/server/          # entrypoint
-└── internal/
-    ├── ai/              # OpenAI-compatible summarizer/categorizer/scorer (+ fallback)
-    ├── api/             # HTTP handlers, middleware, routing
-    ├── auth/            # HMAC bearer-token issue/validate
-    ├── config/          # env-var configuration
-    ├── database/        # SQLite open, schema (additive migrations), seed data
-    ├── fetcher/         # RSS/Atom polling (+ politeness throttle, insert budget)
-    ├── models/          # domain types (+ value-scoring fields, thresholds)
-    ├── repository/      # SQL data access (+ settings_repo for app_settings)
-    ├── scoring/         # AI+heuristic weighted news-value scoring
-    ├── scraper/         # full-content extraction + image URL upgrade
-    └── slug/            # slug helpers
-```
-
-## Development
-
-```bash
-go test ./...        # run tests
-go vet ./...         # static analysis
-make run             # build and run (see Makefile)
+# 4. Vulnerability audit
+GOTOOLCHAIN=auto go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 ```

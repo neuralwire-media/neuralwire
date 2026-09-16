@@ -1,6 +1,6 @@
 # Neuralwire — AI News & Editorial Platform
 
-<img width="1632" height="1343" alt="Screenshot_20260820_022548" src="https://github.com/user-attachments/assets/124469d1-a851-41d6-b86c-57424047a3b7" />
+<img width="1632" height="1343" alt="Neuralwire Editorial Platform" src="https://github.com/user-attachments/assets/124469d1-a851-41d6-b86c-57424047a3b7" />
 
 > An editorial news portal for artificial intelligence, neural networks, and the future of computation. Bridging the gap between silicon and humanity.
 
@@ -18,18 +18,19 @@
 - [Environment Variables](#environment-variables)
 - [Development Workflow](#development-workflow)
 - [CI/CD](#cicd)
-- [Deployment](#deployment)
+- [Deployment & Operations](#deployment--operations)
 - [Security](#security)
 - [Project Structure](#project-structure)
+- [API Reference](#api-reference)
 - [License](#license)
 
 ---
 
 ## Overview
 
-Neuralwire is a **semi-automated news curation platform**. It ingests RSS feeds from curated sources, extracts readable article content, generates AI summaries and category classifications, scores news value, and presents the results in a modern editorial frontend.
+Neuralwire is a **semi-automated news curation platform**. It ingests RSS feeds from curated industry and research sources, extracts readable article content, generates AI summaries and category classifications, scores news value, and presents the results in a modern editorial frontend.
 
-The system uses a **curator model**: AI assists with summarization, categorization, and value scoring, but **human admins make all publishing decisions**. Nothing is auto-published — every article is reviewed as a draft before going live.
+The system uses a **curator model**: AI assists with summarization, categorization, and value scoring, but **human admins make all publishing decisions**. Nothing is auto-published by default — every article is reviewed as a draft before going live. Original full text is **never stored or republished**, respecting source copyright while directing readers to original publishers.
 
 ---
 
@@ -37,178 +38,206 @@ The system uses a **curator model**: AI assists with summarization, categorizati
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Browser (visitor)                     │
-│        https://neuralwire.info (Cloudflare CDN)          │
-└──────────────────────┬──────────────────────────────────┘
-                       │ HTTPS
-┌──────────────────────▼──────────────────────────────────┐
-│              Railway (single container)                  │
-│  ┌──────────────────────────┐  ┌──────────────────────┐  │
-│  │   Go Backend (port 8080) │  │  SvelteKit Frontend  │  │
-│  │   REST API + static serve│  │  (adapter-static)    │  │
-│  └────────────┬─────────────┘  └──────────▲───────────┘  │
-│               │  serves /api/* & static    │             │
-│  ┌────────────▼─────────────┐              │             │
-│  │      SQLite (volume)     │              │             │
-│  │   /app/data/neuralwire.db│              │             │
-│  └──────────────────────────┘              │             │
-└────────────────────────────────────────────┼─────────────┘
-                                             │
-                        ┌────────────────────▼──────────┐
-                        │  External RSS/Atom Sources     │
-                        │  + AI API (DeepSeek, OpenAI)   │
-                        └───────────────────────────────┘
+│                    Browser (visitor)                    │
+│        https://neuralwire.info (Cloudflare CDN / WAF)   │
+└──────────────────────────┬──────────────────────────────┘
+                           │ HTTPS (Port 443)
+┌──────────────────────────▼──────────────────────────────┐
+│                    Production VPS                       │
+│  ┌───────────────────────────────────────────────────┐  │
+│  │             Caddy (Reverse Proxy / TLS)           │  │
+│  └───────────────────────┬───────────────────────────┘  │
+│                          │ Reverse proxy (127.0.0.1:8080)│
+│  ┌───────────────────────▼───────────────────────────┐  │
+│  │            Docker (single container)              │  │
+│  │  ┌──────────────────────────┐  ┌───────────────┐  │  │
+│  │  │   Go Backend (port 8080) │  │   SvelteKit   │  │  │
+│  │  │   REST API + SPA server  │  │ adapter-static│  │  │
+│  │  └────────────┬─────────────┘  └───────▲───────┘  │  │
+│  │               │ serves /api/* & static │          │  │
+│  │  ┌────────────▼─────────────┐          │          │  │
+│  │  │  SQLite (volume mount)   │          │          │  │
+│  │  │  /app/data/neuralwire.db │          │          │  │
+│  │  └──────────────────────────┘          │          │  │
+│  └────────────────────────────────────────┼──────────┘  │
+└───────────────────────────────────────────┼─────────────┘
+                                            │
+                       ┌────────────────────▼───────────┐
+                       │   Curated RSS / Atom Feeds     │
+                       │   + OpenAI / Gemini / DeepSeek │
+                       └────────────────────────────────┘
 ```
 
-**Key design decision:** The frontend is built with `adapter-static` and **served by the Go backend itself** (same origin). This means:
-- No separate static hosting needed
-- API calls use relative paths (`/api/*`)
-- One container serves everything — simple deployment
+**Key design decisions:**
+- **Unified Single Container**: The SvelteKit frontend is built with `@sveltejs/adapter-static` and **served directly by the Go backend** (same origin). No separate frontend node server is required in production.
+- **Dynamic SEO & LCP Optimization**: The Go server intercepts HTML requests to dynamically inject `<head>` fetch preloads, image preconnects, LCP hero image preload tags, and server-rendered SEO metadata.
+- **Embedded Zero-CGO Database**: SQLite via `modernc.org/sqlite` provides ACID compliance, fast in-process query execution, and zero CGO dependencies.
 
 ---
 
 ## Tech Stack
 
 ### Backend
-- **Go 1.25** — high-performance, type-safe REST API
-- **SQLite** (`modernc.org/sqlite`) — pure-Go, zero-CGO, single-file database
-- **go-readability** — article content extraction
-- **gofeed** — RSS/Atom parsing
-- **Standard library** `net/http` + `log/slog` — minimal dependencies, no heavy frameworks
+- **Go 1.25+** — high-performance, type-safe standard library REST API (`net/http`, Go 1.22+ routing patterns)
+- **SQLite** (`modernc.org/sqlite`) — pure-Go, zero-CGO, single-file database with WAL mode and custom migrations
+- **go-readability** (`codeberg.org/readeck/go-readability/v2`) — article content extraction
+- **gofeed** (`github.com/mmcdole/gofeed`) — robust RSS/Atom feed parsing
+- **Structured Logging** (`log/slog`) — JSON/text structured logging with contextual metadata
 
 ### Frontend
-- **SvelteKit 2** — modern, compiler-based framework
-- **Svelte 5** (runes mode)
-- **Tailwind CSS 4** — utility-first styling
-- **adapter-static** — prerendered static output
-- **TypeScript**
+- **SvelteKit 2** & **Svelte 5** — modern compiler-based UI using Svelte 5 Runes (`$state`, `$derived`, `$props`, `$effect`)
+- **Tailwind CSS 4** — utility-first styling with cyber/editorial dark theme
+- **@sveltejs/adapter-static** — prerendered static client SPA
+- **TypeScript** & **Vite** — end-to-end type safety and rapid HMR
 
-### Infrastructure
-- **Railway** — container platform (auto-deploy from GitHub)
-- **Docker** — multi-stage build (node → go → alpine runtime)
-- **Cloudflare** — CDN, WAF, DNS, SSL
-- **GitHub Actions** — CI (build, vet, test, lint)
-- **Let's Encrypt** — SSL certificates (via Railway/Cloudflare)
+### Infrastructure & DevOps
+- **VPS + Docker Compose** — containerized deployment running non-root `neuralwire` user
+- **Caddy** — high-performance reverse proxy and automated TLS management
+- **Cloudflare** — CDN caching, DDoS mitigation, DNS, and WAF protection
+- **GitHub Actions** — multi-stage CI/CD (`backend-ci.yml`, `frontend-ci.yml`, `deploy.yml`) with automated post-deploy container health retry probes
 
 ---
 
 ## Features
 
-### Content Pipeline
-- **RSS ingestion** — fetches multiple feeds with polite rate limiting (1-2s random delay)
-- **Article scraping** — extracts full readable content via readability
-- **AI summarization** — concise summaries via OpenAI-compatible APIs (DeepSeek, Gemini, etc.)
-- **AI categorization** — auto-classifies into categories
-- **AI value scoring** — 0-100 news value rating (impact, novelty, quality) with confidence
-- **Heuristic fallback** — deterministic scoring when AI is unavailable
+### Content Pipeline & Ingestion
+- **25 Default Curated Sources**: Pre-seeded across 5 core categories (AI, Tools, Research, Industry, Machine Learning).
+- **Dynamic Source Management**: Add, edit, enable/disable, delete, or test feed URLs on demand via the admin panel.
+- **Polite Crawling & SSRF Protection**: 1–2s randomized politeness delay between requests and safe dialer IP verification (`netutil.SafeHTTPClient`).
+- **Hybrid Content Extraction**: Full-content extraction via Readability with fallback to RSS excerpts and low-quality content filters (`SCRAPE_MIN_CONTENT_CHARS`).
+- **CDN Image Upgrading**: Automatically detects and upgrades low-res thumbnails to high-resolution variants (Contentful, imgix, Cloudinary, Unsplash, Google, WordPress).
 
-### Curator Model
-- Articles arrive as **drafts** — never auto-published
-- Admin reviews, edits, publishes, or rejects
-- **Value labels** (High/Medium/Low) help admins prioritize
-- Live fetch progress + cancel in-flight fetch
+### Curator Moderation Model
+- **Drafts First**: Fetched articles are stored as drafts and never published automatically unless explicitly configured.
+- **Level 2 AI Value Scoring**: Weighted rating ($0.6 \times \text{AI score} + 0.4 \times \text{Heuristic score}$) assigning HIGH/MEDIUM/LOW badges, confidence metrics, impact/novelty/quality sub-scores, and reasoning.
+- **Configurable Thresholds**: Admins can adjust score boundaries (`low_max`, `medium_min`, `medium_max`, `high_min`) dynamically in `app_settings`.
+- **Live Fetch Control**: Real-time progress monitoring (`/api/admin/fetch/progress`) and immediate cancellation (`/api/admin/fetch/cancel`).
+- **Bulk Operations**: Bulk publish, bulk reject, bulk delete, and primary/featured article toggling.
 
-### Public Features
-- Home feed with featured articles
-- Category pages (AI, Industry, Machine Learning, Research, Tools)
-- **Trending / most-read** ranking (view dedup per visitor)
-- **Related articles** (TF-IDF weighted similarity)
-- **Search** (backend multi-word AND matching)
-- **SEO**: sitemap.xml, robots.txt, Open Graph, Twitter Card, canonical URLs
+### Automation & Autopublish Scheduler
+- **Optional Timer Scheduler**: Configurable cycle interval (minimum 5 minutes) running in background.
+- **Granular Auto-Post Filters**: Filter by category whitelist, value labels (`["medium", "high"]`), and max posts per cycle.
+- **Independent Controls**: Separate start/stop state management (`/api/admin/autopublish/start` and `/stop`).
 
-### Monitoring & Performance
-- **Structured logging** (Go `slog`, JSON or text, configurable level)
-- **Health checks** — `/api/health` & `/api/healthz` (DB ping, 200/503)
-- **Prometheus metrics** — `/api/metrics` (requests, latency, fetch cycles, AI calls)
-- **HTTP compression** — gzip/brotli, ~70% bandwidth savings
-- **ETag conditional requests** — 304 Not Modified
-- **Per-route cache headers**
-- **DB indexes** for hot paths (verified via EXPLAIN QUERY PLAN)
+### Public Editorial Portal
+- **Home Feed & Categories**: Multi-category browsing with client-side reactive "Load More" pagination and quick "Collapse Feed" FAB.
+- **Trending / Most-Read**: Deduplicated view tracking per browser (`nw_viewer_id` + 6h IP cooldown) returning top-read stories.
+- **Related Articles**: TF-IDF weighted similarity matching by keyword overlap, category, and source.
+- **Backend Full-Text Search**: Instant debounced search across all published articles with multi-token AND matching.
+- **Dynamic SEO & Feeds**: Backend-generated `/sitemap.xml` and `/robots.txt` with Open Graph and Twitter Card tags.
 
-### Security
-- Bearer-token admin auth (constant-time comparison)
-- **CSRF protection** on admin mutations
-- **Rate limiting** — login (brute force), views, global (anti-scan)
-- **Security headers** — CSP, X-Frame-Options, nosniff, etc.
-- **Client IP anti-spoofing** (TRUST_PROXY aware)
-- **Production hardening** — refuses to boot with default credentials
-- **Cloudflare** — WAF, anti-DDoS, CDN
+### Operations, Analytics & Security
+- **Analytics Dashboard**: Real-time stats on page views, published counts, draft pipelines, and top-performing articles.
+- **Automated Database Backups**: Periodic gzip snapshots with retention pruning and on-demand download via `/api/admin/backup`.
+- **Prometheus Metrics & Health Checks**: `/api/metrics` (request counts, latencies, AI calls, fetch stats) and `/api/healthz` (DB ping).
+- **Security Hardening**: HMAC bearer tokens, CSRF origin verification on mutations, strict rate limiting (login, views, global), and security headers (CSP, X-Frame-Options, nosniff, COOP, CORP).
 
 ---
 
 ## Getting Started
 
 ### Prerequisites
-- Go 1.25+
-- Node.js 24+
-- npm
+- **Go 1.25+**
+- **Node.js 24+** and **npm**
+- **Docker & Docker Compose** (for containerized setup)
 
-### 1. Clone & install
+---
 
+### Local Development Setup
+
+#### 1. Clone the repository
 ```bash
 git clone git@github.com:stysus/Neuralwire.git
 cd Neuralwire
 ```
 
-### 2. Backend setup
-
+#### 2. Backend Setup
 ```bash
 cd backend
-cp .env.example .env        # configure your env
+cp .env.example .env        # Configure your local settings
 go mod download
-go run ./cmd/server         # starts on :8080
+go run ./cmd/server         # Starts server on http://localhost:8080
 ```
 
-### 3. Frontend setup
-
+#### 3. Frontend Setup
 ```bash
 cd frontend
-cp .env.example .env.local  # set PUBLIC_API_URL=http://localhost:8080/api
+cp .env.example .env.local  # Set PUBLIC_API_URL=http://localhost:8080/api
 npm install
-npm run dev                 # starts on :5173
+npm run dev                 # Starts Vite dev server on http://localhost:5173
 ```
 
-### 4. Access
-- Frontend: http://localhost:5173
-- API: http://localhost:8080/api
-- Admin login: http://localhost:5173/admin
+#### 4. Access Local Services
+- **Public Portal**: `http://localhost:5173`
+- **Admin Panel**: `http://localhost:5173/admin`
+- **API Endpoints**: `http://localhost:8080/api`
+
+---
+
+### Running via Docker Compose (Single Container)
+
+To run the unified production build locally:
+```bash
+# Build and boot container
+docker compose up -d --build
+
+# View logs
+docker compose logs -f
+```
+The application will be accessible at `http://localhost:8080`.
 
 ---
 
 ## Environment Variables
 
-### Backend (`backend/.env`)
+### Backend Configuration (`backend/.env`)
 
 | Variable | Default | Description |
 |---|---|---|
-| `PORT` | `8080` | HTTP listen port |
-| `APP_ENV` | `development` | `production` enables hardening |
-| `DB_PATH` | `data/neuralwire.db` | SQLite file location |
-| `ADMIN_USERNAME` | `admin` | Admin login |
-| `ADMIN_PASSWORD` | `admin123` | **Change in production** |
-| `ADMIN_TOKEN_SECRET` | dev value | **Change in production** |
-| `AI_SUMMARY_API_KEY` | *(empty)* | OpenAI-compatible API key |
-| `AI_SUMMARY_PROVIDER` | `openai` | `openai`, `gemini`, `deepseek`, `groq`, `ollama` |
-| `CORS_ALLOW_ORIGIN` | localhost:5173 | Allowed frontend origins |
-| `STATIC_DIR` | `../frontend/build` | Served static frontend |
-| `LOG_LEVEL` | `info` | `debug`/`info`/`warn`/`error` |
-| `LOG_FORMAT` | `text` | `text`/`json` |
-| `GLOBAL_RATE_LIMIT` | `120` | Per-IP req/min (0=off) |
-| `LOGIN_RATE_LIMIT` | `5` | Login attempts/min (0=off) |
-| `VIEW_RATE_LIMIT` | `30` | View count req/min (0=off) |
+| `PORT` | `8080` | HTTP port the server listens on |
+| `APP_ENV` | `development` | Set to `production` to enforce security hardening |
+| `TRUST_PROXY` | `false` | Set `true` behind reverse proxies (Caddy/Nginx) for accurate IP resolution |
+| `DB_PATH` | `data/neuralwire.db` | SQLite database file location |
+| `STATIC_DIR` | `../frontend/build` | Directory of built static frontend files (served at `/`) |
+| `UPLOAD_DIR` | `./data/uploads` | Directory for admin image uploads (served at `/uploads/`) |
+| `BACKUP_DIR` | `./data/backups` | Directory for automated SQLite gzip snapshots |
+| `BACKUP_RETENTION` | `7` | Number of backup snapshots to retain |
+| `BACKUP_INTERVAL_HOURS` | `24` | Automated backup schedule interval in hours (0 = disabled) |
+| `ADMIN_USERNAME` | `admin` | Admin username for `/api/admin/login` |
+| `ADMIN_PASSWORD` | `admin123` | Admin password (**must be changed in production**) |
+| `ADMIN_TOKEN_SECRET` | *(dev secret)* | HMAC key for signing bearer tokens (**must be changed in production**) |
+| `AI_SUMMARY_API_KEY` | *(empty)* | OpenAI-compatible API key for summarization & scoring |
+| `AI_SUMMARY_PROVIDER` | `openai` | Preset: `openai`, `gemini`, `openrouter`, `groq`, `ollama` |
+| `AI_SUMMARY_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible base URL |
+| `AI_SUMMARY_MODEL` | `gpt-4o-mini` | AI model used for summaries and value scoring |
+| `AI_IMAGE_GENERATION_ENABLED` | *(auto)* | Enable/disable DALL-E style image generation (`true`/`false`) |
+| `CORS_ALLOW_ORIGIN` | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated allowed frontend origins |
+| `GLOBAL_RATE_LIMIT` | `120` | Max requests per IP per minute across all endpoints (0 = off) |
+| `LOGIN_RATE_LIMIT` | `5` | Max login attempts per IP per minute (0 = off) |
+| `VIEW_RATE_LIMIT` | `30` | Max view tracking requests per IP per minute (0 = off) |
+| `TRENDING_CACHE_TTL_SECONDS` | `300` | In-memory cache TTL for trending query in seconds |
+| `SCRAPE_MAX_PER_SOURCE` | `5` | Maximum newest articles scraped per source per cycle |
+| `SCRAPE_MAX_INSERT_PER_SOURCE` | `5` | Hard cap on new drafts stored per source per cycle |
+| `SCRAPE_TIMEOUT_SECONDS` | `15` | Per-article scraper timeout |
+| `SCRAPE_MIN_CONTENT_CHARS` | `500` | Minimum article character count required to keep draft |
+| `SCRAPE_DELAY_MIN_SECONDS` | `1` | Minimum politeness delay before external requests |
+| `SCRAPE_DELAY_MAX_SECONDS` | `2` | Maximum politeness delay before external requests |
+| `HTTP_COMPRESSION_ENABLED` | `true` | Enable gzip/brotli payload compression |
+| `LOG_LEVEL` | `info` | Minimum log level: `debug`, `info`, `warn`, `error` |
+| `LOG_FORMAT` | `text` | Structured log output format: `text` or `json` |
 
-### Frontend (`frontend/.env.local`)
+### Frontend Configuration (`frontend/.env.local`)
 
 | Variable | Description |
 |---|---|
-| `PUBLIC_API_URL` | Backend API URL (dev: `http://localhost:8080/api`, **production: leave unset** → uses relative `/api`) |
-| `PUBLIC_SITE_URL` | Public site origin (used for sitemap/OG/canonical) |
+| `PUBLIC_API_URL` | API base URL (dev: `http://localhost:8080/api`; **production: leave unset** to use relative `/api`) |
+| `PUBLIC_SITE_URL` | Canonical site origin (e.g. `https://neuralwire.info`) used for sitemaps, OpenGraph, and Twitter cards |
 
 ---
 
 ## Development Workflow
 
-Neuralwire uses the **Feature Branching Strategy (GitHub Flow)** off `main`:
+Neuralwire enforces the **Feature Branching Strategy (GitHub Flow)** off `main`:
 
 ```
 main (protected production branch, deploys on merge)
@@ -219,121 +248,86 @@ main (protected production branch, deploys on merge)
   └── open Pull Request -> main (CI must pass -> review -> merge -> deploy)
 ```
 
-1. **Pull latest `main`**: `git checkout main && git pull origin main`
-2. **Branch out**: `git checkout -b <type>/<kebab-case-name>` (e.g. `feat/interactive-cluster-ui`)
-3. **Develop & verify locally**:
-   - Backend suite: `gofmt -w . && gofmt -l . && go vet ./... && go test -count=1 ./...`
-   - Frontend suite: `npm run format && npm run lint && npm run check && npm run build`
-   - Mandatory live localhost smoke test (clean server boot, 0 panics, 0 unexpected 4xx/5xx).
-4. **Push & open Pull Request** targeting `main` using the appropriate template.
-5. **CI must pass** (`Backend CI` + `Frontend CI` = 100% green).
-6. **Merge** → auto-deploys to production.
+### 1. Mandatory Local Verification Protocol
+Before proposing any commit or PR, both suites MUST pass with Exit Code 0:
 
-> `main` is **protected**: direct pushes are blocked, force-push is blocked, and all commits must come through PRs with green CI.
+```bash
+# Backend Verification (gofmt check, go vet, test suite)
+cd backend && make verify
+
+# Frontend Verification (prettier format, eslint, svelte-check, static build)
+cd frontend && npm run verify
+```
+
+### 2. Live Localhost Smoke Test
+1. Boot the server locally: `cd backend && go run ./cmd/server`.
+2. Perform smoke testing against `http://localhost:8080/api/healthz`, `/api/categories`, and `/api/news`.
+3. Confirm 0 panics, 0 unexpected 4xx/5xx HTTP errors, and clean shutdown.
+
+### 3. Cryptographic GPG Commit Signing (Strict Invariant)
+All commits MUST be cryptographically signed with GPG (`commit.gpgsign=true`):
+```bash
+git commit -S -m "type(scope): clear description"
+git log -n 1 --show-signature
+```
 
 ---
 
 ## CI/CD
 
-### GitHub Actions (`.github/workflows/`)
+The repository includes automated GitHub Actions workflows in `.github/workflows/`:
 
-**`backend-ci.yml`** — on push/PR touching `backend/**`:
-1. `go vet ./...`
-2. `go build ./...`
-3. `gofmt` format check
-4. `go test ./... -race`
-5. Builds & uploads server binary artifact
-
-**`frontend-ci.yml`** — on push/PR touching `frontend/**`:
-1. `npm ci`
-2. `svelte-check` (type check)
-3. Prettier + ESLint
-4. `vite build`
-
-### Continuous Deployment
-
-- **Railway** watches the `main` branch
-- Every push to `main` → auto-builds Docker image → deploys
-- **Wait for CI** enabled — Railway waits for GitHub CI to pass before deploying
-- Production: https://neuralwire.info (behind Cloudflare)
+- **`backend-ci.yml`**:
+  - Concurrency group `backend-ci-${{ github.ref }}` (`cancel-in-progress: true`).
+  - Runs `go vet`, `go build`, `gofmt -l .`, race test suite (`go test -race`), and security audit via `govulncheck` (`GOTOOLCHAIN=auto`).
+  - Uploads compiled `neuralwire-server` binary artifact.
+- **`frontend-ci.yml`**:
+  - Concurrency group `frontend-ci-${{ github.ref }}` (`cancel-in-progress: true`).
+  - Runs `npm ci`, Prettier + ESLint checks, `svelte-check` typecheck, static production build, and `npm audit --audit-level=high`.
+- **`deploy.yml`**:
+  - Serialized concurrency group `deploy-vps` (`cancel-in-progress: false`).
+  - Triggers on merge to `main` → SSHs into production VPS → pulls changes and builds container with Docker Compose.
+  - **Automated Post-Deploy Health Check**: Executes a 30-second polling retry loop (5s interval) validating container state (`docker compose ps`) and `http://127.0.0.1:8080/api/healthz`. Dumps 100 lines of container logs and exits with code 1 if health check fails.
 
 ---
 
-## Deployment
+## Deployment & Operations
 
-### Docker (production)
+### Production Architecture (VPS + Docker + Caddy)
 
-The root `Dockerfile` is multi-stage:
-1. **node:24-alpine** — builds SvelteKit frontend (`adapter-static` → `build/`)
-2. **golang:1.25-alpine** — compiles Go backend (`CGO_ENABLED=0`)
-3. **alpine:3.20** — minimal runtime, non-root user, health check
+The production deployment runs on a Linux VPS behind Caddy and Cloudflare:
 
 ```bash
-# Local build & run
-docker build -t neuralwire .
-docker run -p 8080:8080 \
-  -e APP_ENV=production \
-  -e ADMIN_USERNAME=... -e ADMIN_PASSWORD=... -e ADMIN_TOKEN_SECRET=... \
-  neuralwire
-```
-
-Or with docker-compose:
-```bash
+# Manual VPS deployment / restart
+cd /home/deploy/neuralwire
+git pull origin main
 docker compose up -d --build
 ```
 
-### Railway (current production)
+### Volume Persistence & File Permissions
+Persistent data is mounted at `/app/data` (mapped to volume `neuralwire-data`). The runtime container runs as non-root user `neuralwire` (`UID 10001`). The entrypoint script (`docker-entrypoint.sh`) handles permission ownership automatically on startup before dropping privileges.
 
-1. Connect GitHub repo to Railway
-2. Set environment variables (see [Environment Variables](#environment-variables))
-3. Attach a **volume at `/app/data`** (SQLite persistence)
-4. Railway auto-builds from the Dockerfile and deploys
-
-> **Volume note:** the container runs as non-root user `neuralwire`. The `docker-entrypoint.sh` chowns the attached volume before starting so SQLite can write.
-
-### Releases & Rollback
-
-**Releases are tagged** with semantic versions. The latest tag deployed to production is the current release.
-
+### Release Tagging & Rollback
+Releases are tagged using semantic versioning:
 ```bash
-# Create & push a new release tag
-git tag -a v1.1.0 -m "Release v1.1.0"
-git push origin v1.1.0
+git tag -a v1.2.0 -m "Release v1.2.0"
+git push origin v1.2.0
 ```
 
-**Rollback — 1 of 2 ways:**
-
-1. **Via Railway UI (fastest):** Railway → Service → Deployments → select the previous successful deployment → **Redeploy**.
-
-2. **Via git tag (recommended for permanent rollback):**
-```bash
-# Point main back at a known-good release and push (through a PR)
-git checkout -b rollback-v1.0.0 origin/main
-git revert --no-commit <bad-commit-range>   # or reset to the tag
-git push -u origin rollback-v1.0.0
-# Open a PR -> CI must pass -> merge -> Railway auto-deploys
-```
-
-**When to rollback:**
-- 5xx errors spike after a deploy
-- Admin login / fetch pipeline broken
-- Frontend blank or assets 404
-- Health check (`/api/healthz`) not returning 200
-
-**After rollback:** investigate the root cause on a new fix branch (`fix/...`), fix it, and ship a new release — do not keep patching the rolled-back code.
+**Rollback Procedures:**
+1. **Via Git Revert (Standard)**: Revert bad commit on a `fix/` branch, open PR, merge, and let CI/CD deploy.
+2. **Via Docker Compose on VPS (Emergency)**: Check out the previous release tag on the VPS and run `docker compose up -d --build`.
 
 ---
 
 ## Security
 
-- **Secret management**: all secrets live in Railway environment variables, never in the repo
-- **`.env` files**: gitignored, only `.env.example` templates are committed
-- **Production guard**: `APP_ENV=production` refuses to boot with default admin credentials or dev token secret
-- **Auth**: bearer tokens signed with HMAC (constant-time validation)
-- **CSRF**: origin check on admin mutations
-- **Rate limiting**: login brute-force, view abuse, global anti-scan
-- **Headers**: CSP, X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy
-- **Cloudflare**: WAF rules, DDoS protection, bot mitigation
+- **Constant-Time Auth**: Bearer tokens are signed with HMAC-SHA256 and validated with `crypto/subtle.ConstantTimeCompare`.
+- **CSRF Defense**: Origin header validation enforced on all state-changing admin mutation endpoints.
+- **SSRF Defense**: Outbound scrapers and feed testers route through `netutil.SafeHTTPClient` which blocks private, loopback, link-local, and multicast IP ranges.
+- **DoS & Memory Protection**: Request bodies are restricted via `http.MaxBytesReader`.
+- **Hardened Production Gate**: Server refuses to boot with default credentials or development secrets when `APP_ENV=production`.
+- **Security Headers**: Injects `Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy`, `Referrer-Policy`, and `Permissions-Policy`.
 
 ---
 
@@ -341,67 +335,100 @@ git push -u origin rollback-v1.0.0
 
 ```
 .
-├── .github/workflows/        # CI pipelines
+├── .github/workflows/        # CI/CD pipelines (backend-ci, frontend-ci, deploy)
 ├── backend/
-│   ├── cmd/server/           # Go entrypoint
+│   ├── cmd/server/           # Go main entrypoint
 │   ├── internal/
-│   │   ├── ai/               # AI summarization, categorization, image gen
-│   │   ├── api/              # HTTP handlers, middleware, metrics
-│   │   ├── auth/             # Bearer token auth
-│   │   ├── cache/            # Simple TTL cache
-│   │   ├── config/           # Env config loading
-│   │   ├── database/         # SQLite schema & migrations
-│   │   ├── fetcher/          # RSS ingestion pipeline
-│   │   ├── metrics/          # Prometheus counters
-│   │   ├── ratelimit/        # Per-IP rate limiting
-│   │   ├── repository/       # Data access layer
-│   │   ├── scoring/          # AI + heuristic news value scoring
-│   │   ├── scraper/          # Readability content extraction
-│   │   └── slug/             # URL slug generation
-│   └── .env.example          # Backend env template
+│   │   ├── ai/               # AI summarizer, categorizer, news-value scoring
+│   │   ├── api/              # HTTP server, handlers, middleware, routes, preloading
+│   │   ├── auth/             # HMAC token issue & validation
+│   │   ├── cache/            # TTL in-memory cache for trending queries
+│   │   ├── config/           # Environment variable loading & defaults
+│   │   ├── database/         # SQLite initialization, migrations, seeds
+│   │   ├── fetcher/          # RSS ingestion pipeline & politeness throttler
+│   │   ├── metrics/          # Prometheus runtime collectors
+│   │   ├── models/           # Domain data models & request/response schemas
+│   │   ├── netutil/          # SSRF-safe dialer & HTTP clients
+│   │   ├── ratelimit/        # Per-IP sliding-window rate limiters
+│   │   ├── repository/       # Database queries (News, Categories, Sources, Settings)
+│   │   ├── scheduler/        # Autopublish cron timer & background worker
+│   │   ├── scoring/          # Heuristic & AI weighted news-value scorer
+│   │   ├── scraper/          # Readability content extraction & image upgrade
+│   │   └── slug/             # SEO URL slug generator
+│   ├── Makefile              # Single-command verification & tasks
+│   └── .env.example          # Backend configuration template
 ├── frontend/
 │   ├── src/
-│   │   ├── lib/              # API client, components, mock data
-│   │   └── routes/           # SvelteKit pages (admin, [slug], category, etc.)
-│   ├── static/               # robots.txt, images
-│   └── .env.example          # Frontend env template
-├── Dockerfile                # Multi-stage production image
-├── docker-compose.yml        # Local container orchestration
-└── docker-entrypoint.sh      # Volume permission fix + user drop
+│   │   ├── lib/              # API client, TypeScript models, Svelte components
+│   │   └── routes/           # SvelteKit pages (Portal, [slug], Search, Admin suite)
+│   ├── static/               # Favicon and static assets
+│   ├── package.json          # Frontend dependencies & verification scripts
+│   └── .env.example          # Frontend configuration template
+├── Dockerfile                # Multi-stage production container build
+├── docker-compose.yml        # Container orchestration specification
+├── docker-entrypoint.sh      # Volume permission initialization & non-root drop
+├── AGENTS.md                 # Persistent agent guidelines & verification protocols
+├── CONTRIBUTING.md           # Developer contribution guidelines
+└── LICENSE                   # MIT License
 ```
 
 ---
 
-## API Endpoints
+## API Reference
+
+All endpoints return JSON responses unless otherwise noted. List endpoints follow the standard envelope `{ "data": [...], "pagination": {...} }`.
+
+### Public Endpoints
 
 | Method | Path | Description | Auth |
 |---|---|---|---|
-| GET | `/api/health` | Health check (DB ping) | Public |
-| GET | `/api/healthz` | Health check alias | Public |
-| GET | `/api/metrics` | Prometheus metrics | Public |
-| GET | `/api/news` | List published news (filter/search/page) | Public |
-| GET | `/api/news/{id}` | Get article by ID | Public |
-| GET | `/api/news/trending` | Most-read articles | Public |
-| GET | `/api/news/{id}/related` | Related articles | Public |
-| POST | `/api/news/{id}/view` | Record a view | Public |
-| GET | `/api/categories` | List categories | Public |
-| POST | `/api/admin/login` | Get auth token | Public |
-| GET/POST/PUT/DELETE | `/api/admin/news` | Admin CRUD | Bearer |
-| POST | `/api/admin/fetch` | Trigger RSS fetch | Bearer |
-| GET | `/api/admin/fetch/progress` | Fetch progress | Bearer |
-| POST | `/api/admin/fetch/cancel` | Cancel fetch | Bearer |
-| GET/PUT | `/api/admin/settings` | App settings | Bearer |
+| `GET` | `/api/health` | Liveness health check (DB ping) | Public |
+| `GET` | `/api/healthz` | Health check alias for load balancers & CI probes | Public |
+| `GET` | `/api/metrics` | Prometheus metrics counters | Public |
+| `GET` | `/sitemap.xml` | Dynamic XML sitemap of all published articles | Public |
+| `GET` | `/robots.txt` | Dynamic robots exclusion file | Public |
+| `GET` | `/api/news` | List published articles (`?category=`, `?q=`, `?page=`, `?page_size=`) | Public |
+| `GET` | `/api/news/{id}` | Single published article by ID or slug | Public |
+| `GET` | `/api/news/trending` | Most-read published articles (`?window=day\|week\|all`, `?limit=`) | Public |
+| `GET` | `/api/news/{id}/related` | Related articles ranked by keyword & category similarity | Public |
+| `POST` | `/api/news/{id}/view` | Record an article read (`{ "viewer_key": "..." }`) | Public |
+| `GET` | `/api/categories` | List all available categories | Public |
+| `POST` | `/api/admin/login` | Authenticate admin credentials and receive bearer token | Public |
 
----
+### Admin Moderation Endpoints
 
-## Roadmap / Backlog
+All admin endpoints below require `Authorization: Bearer <token>` and enforce CSRF origin protection on mutations.
 
-Tracked in Linear (project: NEURALWIRE):
-- Frontend lazy-loading & resource hints
-- Analytics (privacy-friendly: Umami/Plausible)
-- JSON-LD structured data
-- PostgreSQL migration (future, if needed)
-- Full CD pipeline with rollback strategy
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/admin/news` | List articles across any status (`?status=draft\|published\|rejected`, `?value_label=`) |
+| `GET` | `/api/admin/news/{id}` | Get full article details including extracted content |
+| `POST` | `/api/admin/news` | Create a new article manually |
+| `PUT` | `/api/admin/news/{id}` | Update article title, summary, category, image URL, or status |
+| `POST` | `/api/admin/news/{id}/publish` | Publish a draft article |
+| `POST` | `/api/admin/news/{id}/reject` | Move a draft or article to rejected archive |
+| `POST` | `/api/admin/news/{id}/set-primary` | Set article as primary/featured story |
+| `POST` | `/api/admin/news/bulk` | Bulk action (`publish`, `reject`, `delete`) on an array of IDs |
+| `DELETE` | `/api/admin/news/{id}` | Permanently delete an article |
+| `DELETE` | `/api/admin/news` | Bulk delete all articles with a specific status (`?status=rejected`) |
+| `POST` | `/api/admin/fetch` | Manually trigger an RSS ingestion cycle across all active sources |
+| `GET` | `/api/admin/fetch/progress` | Live progress of running fetch cycle (`{ "running": true, "percent": 50 }`) |
+| `POST` | `/api/admin/fetch/cancel` | Abort an in-flight fetch cycle |
+| `GET` | `/api/admin/settings` | Get value scoring thresholds (`low_max`, `medium_min`, `medium_max`, `high_min`) |
+| `PUT` | `/api/admin/settings` | Update value scoring thresholds in database |
+| `GET` | `/api/admin/autopublish` | Get autopublish scheduler configuration and running status |
+| `PUT` | `/api/admin/autopublish` | Update autopublish scheduler settings |
+| `POST` | `/api/admin/autopublish/start` | Start the automated background ingestion & publishing scheduler |
+| `POST` | `/api/admin/autopublish/stop` | Stop the automated background scheduler |
+| `POST` | `/api/admin/upload-image` | Upload custom article cover image (JPEG, PNG, WebP, GIF $\le$ 5MB) |
+| `GET` | `/api/admin/backup` | Download an immediate gzip snapshot of the SQLite database |
+| `GET` | `/api/admin/sources` | List all configured RSS feeds with active status and category |
+| `POST` | `/api/admin/sources` | Add a new RSS feed source |
+| `PUT` | `/api/admin/sources/{id}` | Update an existing RSS feed source |
+| `PATCH` | `/api/admin/sources/{id}/toggle` | Toggle RSS source enabled/disabled state |
+| `DELETE` | `/api/admin/sources/{id}` | Delete an RSS feed source |
+| `POST` | `/api/admin/sources/test` | Validate and preview an RSS feed URL before adding |
+| `GET` | `/api/admin/analytics` | Fetch analytics summary (views, categories, drafts, published, top articles) |
 
 ---
 
@@ -409,5 +436,4 @@ Tracked in Linear (project: NEURALWIRE):
 
 MIT License — see [LICENSE](LICENSE).
 
-© 2026 NEURALWIRE MEDIA. All rights reserved for curated content; source code
-is licensed under MIT.
+© 2026 NEURALWIRE MEDIA. All rights reserved for curated content; source code is licensed under MIT.
