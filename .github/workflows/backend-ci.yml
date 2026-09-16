@@ -73,7 +73,7 @@ jobs:
 
       - name: Upload server binary
         if: steps.filter.outputs.backend == 'true'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: neuralwire-server
           path: backend/neuralwire-server
