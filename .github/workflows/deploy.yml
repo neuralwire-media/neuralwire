@@ -15,6 +15,10 @@ name: Deploy to VPS
       - '.github/workflows/frontend-ci.yml'
   workflow_dispatch:
 
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -36,6 +40,40 @@ jobs:
             git config --global --add safe.directory /app/neuralwire
             git pull origin main
             docker compose up -d --build
+
+            echo "==> Verifying container health & uptime..."
+            MAX_RETRIES=6
+            RETRY_COUNT=0
+            HEALTH_OK=0
+
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+              RETRY_COUNT=$((RETRY_COUNT+1))
+              echo "Checking health probe (attempt $RETRY_COUNT/$MAX_RETRIES)..."
+              sleep 5
+
+              STATUS=$(docker compose ps --format '{{.Status}}' neuralwire 2>/dev/null || true)
+              if echo "$STATUS" | grep -iqE "restart|exit"; then
+                echo "ERROR: Container is in bad state: $STATUS"
+                docker compose logs --tail=100 neuralwire
+                exit 1
+              fi
+
+              if curl -f -s -m 5 http://127.0.0.1:8080/api/healthz > /dev/null; then
+                echo "Healthcheck probe succeeded! HTTP 200 OK received from /api/healthz."
+                HEALTH_OK=1
+                break
+              fi
+            done
+
+            if [ $HEALTH_OK -ne 1 ]; then
+              echo "ERROR: Healthcheck probe timed out after 30 seconds."
+              echo "==> Container status:"
+              docker compose ps
+              echo "==> Recent container logs:"
+              docker compose logs --tail=100 neuralwire
+              exit 1
+            fi
+
             echo "==> Verifying container status..."
             docker compose ps
             echo "==> Deployment completed successfully!"

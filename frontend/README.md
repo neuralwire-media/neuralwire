@@ -1,163 +1,148 @@
 # Neuralwire Frontend
 
-SvelteKit frontend for the **Neuralwire** AI news website (global audience,
-English by default). Renders the public news feed, category/search pages,
-article detail pages and the admin moderation panel.
+SvelteKit frontend for the **Neuralwire** AI news website (global audience, English by default). Renders the public editorial portal and the admin moderation suite.
 
-## Features
+---
 
-- Public feed with category filters, search and per-article detail pages
-- **Trending / most-read** section on the homepage: a `TrendingNews.svelte`
-  ranking of the top-5 most-read articles this week (view counts tracked via
-  `POST /api/news/{id}/view` fired when an article page opens, deduplicated
-  per browser via a localStorage `nw_viewer_id`)
-- **Responsive news grid**: 1 column (mobile) → 2 (tablet) → 3 (desktop) → 5
-  (very wide / 2xl) on the home, category and search pages
-- **Curator model article pages**: each story shows an AI digest summary plus
-  a "READ FULL STORY" link to the original source (full text is never
-  republished)
-- **Admin panel** (`/admin`):
-  - Dashboard with draft/published/rejected counts, manual fetch trigger and
-    live fetch progress bar that survives page refreshes, plus
-    `[CANCEL_FETCH]` to abort a running cycle
-  - Scoring thresholds editor (`// VALUE_SCORE_THRESHOLDS`)
-  - Draft review with publish/reject/delete workflows
-  - Draft list shows the advisory value score badge
-    (`HIGH`/`MEDIUM`/`LOW`), sub-score breakdown (AI impact/novelty/quality +
-    heuristic), confidence, method and AI reason, with filtering by category
-    and by value label
+## Architecture & Tech Stack
 
-## Developing
+- **Framework**: **SvelteKit 2** running **Svelte 5** in Runes mode (`$state`, `$derived`, `$props`, `$effect`).
+- **Styling**: **Tailwind CSS 4** (`@tailwindcss/vite`) with custom editorial dark theme.
+- **Build Adapter**: **`@sveltejs/adapter-static`** generates a prerendered static client SPA served directly by the Go backend in production.
+- **Type Safety**: Full TypeScript integration checked via `svelte-check`.
+- **Bundler**: Vite with instant HMR and optimized asset hashing.
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+---
 
-```sh
+## Core Capabilities
+
+### 1. Public Editorial Portal
+
+- **Homepage News Grid (`/`)**:
+  - Hero featured article with automatic LCP preloading.
+  - Category navigation tabs (AI, Machine Learning, Research, Tools, Industry).
+  - Reactive **"Load More"** pagination (displays 15 articles initially, appends 15 more per click).
+  - Floating **"Collapse Feed"** FAB to reset feed view and smoothly scroll back to top.
+  - **Trending / Most-Read Carousel (`TrendingNews.svelte`)**: Highlights top-5 most read articles for the week.
+- **Article Detail Page (`/[slug]`)**:
+  - Displays curated AI digest summary and metadata.
+  - Links out to the original publisher ("Read Full Story") — preserving source copyright and fair use.
+  - Automatic fire-and-forget view recording (`POST /api/news/{id}/view`) with browser-level deduplication (`nw_viewer_id`).
+  - Related stories section using TF-IDF weighted similarity matching.
+- **Category Feeds (`/category/[slug]`)**:
+  - Dedicated pages for all 5 core categories with responsive 5-column grid layout (`2xl:grid-cols-5`).
+- **Backend-Powered Search (`/search`)**:
+  - Real-time search with ~300ms debounce querying backend full-text search with multi-word AND matching.
+- **Static & Legal Pages**:
+  - `/about`: Editorial platform overview and curation principles.
+  - `/copyright`: Fair use statement and publisher attribution notice.
+
+### 2. Admin Management Suite (`/admin`)
+
+- **Dashboard Overview (`/admin`)**:
+  - Real-time pipeline counters (draft, published, rejected).
+  - Manual fetch trigger with live progress bar and `[CANCEL FETCH]` capability.
+  - Autopublish scheduler configuration (intervals, category filters, score threshold filters) with independent Start/Stop controls.
+  - Value scoring threshold manager (`score_low_max`, `score_medium_min`, `score_medium_max`, `score_high_min`).
+  - On-demand database backup download.
+- **Drafts Moderation (`/admin/drafts`)**:
+  - Advisory AI value score badges (`HIGH`, `MEDIUM`, `LOW`).
+  - Detailed sub-score breakdown (Impact, Novelty, Quality, Heuristics, Confidence, and AI reasoning).
+  - Single-item and bulk actions: Bulk Publish, Bulk Reject, and Bulk Delete.
+- **Published Management (`/admin/published`)**:
+  - Search and filter live articles, view individual read counts, and toggle primary/featured status.
+- **Rejected Archive (`/admin/rejected`)**:
+  - Archive of rejected drafts with restore and permanent delete options.
+- **RSS Sources Manager (`/admin/sources`)**:
+  - Full CRUD interface for RSS feeds.
+  - Live feed tester to validate and preview RSS URLs before saving.
+  - Instant enable/disable toggle.
+- **Analytics Dashboard (`/admin/analytics`)**:
+  - Comprehensive metrics: total page views, category view shares, publication velocity, and top-read articles.
+- **Article Preview & Editor (`/admin/preview/[id]`)**:
+  - Metadata and content editor with custom cover image upload (`POST /api/admin/upload-image`) and instant live preview.
+
+---
+
+## Environment Variables
+
+Configure in `frontend/.env.local`:
+
+| Variable          | Description                                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `PUBLIC_API_URL`  | Base URL for backend API (development: `http://localhost:8080/api`; **production: leave unset** to use relative `/api`)  |
+| `PUBLIC_SITE_URL` | Canonical site URL (e.g. `https://neuralwire.info`) used for generating canonical tags, OpenGraph, and Twitter Card URLs |
+
+---
+
+## Development & Verification
+
+### Running the Dev Server
+
+```bash
+cd frontend
+cp .env.example .env.local
+
+# Start development server on http://localhost:5173
 npm run dev
 
-# or start the server and open the app in a new browser tab
+# Or open browser automatically
 npm run dev -- --open
 ```
 
-## Building
+### Production Build & Preview
 
-To create a production version of your app:
-
-```sh
+```bash
+# Compile static SPA build into build/ directory
 npm run build
+
+# Preview the static build locally
+npm run preview
 ```
 
-You can preview the production build with `npm run preview`.
+### Mandatory Verification Suite
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+Before pushing changes or creating a PR, run the single-command verification suite:
 
-## Recent changes
+```bash
+# Runs format check, ESLint, svelte-check, and static production build
+npm run verify
+```
 
-### 2026-08-14 — Sitemap + robots.txt + full SEO/OG meta tags (STY-44, STY-46)
+---
 
-- SEO/meta completion:
-  - `canonical` links on the home and article pages (plus category, search,
-    about).
-  - `og:url`, `og:site_name`, `og:image` (favicon fallback) and full
-    `twitter:title`/`twitter:description`/`twitter:image` cards globally and
-    on category/search/about/article pages.
-  - Article `og:image`/`twitter:image` are absolutized and fall back to the
-    favicon when the article has no image.
-- Cleaned up pre-existing unused-code lint errors in `FetchProgress.svelte`,
-  `TrendingNews.svelte`, `[slug]/+page.svelte` and `admin/drafts/+page.svelte`
-  so the CI pipeline (check + lint + build) passes.
-- Verified with `npm run check` (0 errors, 0 warnings), `npm run lint` and
-  `npm run build`.
+## Project Structure
 
-### 2026-08-15 — Removed frontend sitemap/robots routes (STY-52)
-
-- Deleted `src/routes/sitemap.xml/` and `src/routes/robots.txt/` — the Go
-  backend now generates `/sitemap.xml` and `/robots.txt` dynamically from the
-  database, so the prerendered frontend routes (which only ever contained 3
-  URLs at build time) were removed to avoid conflicts.
-
-### 2026-08-14 — Full-color article images everywhere (STY-25)
-
-- Removed the `grayscale` / `group-hover:grayscale-0` classes from all news
-  images on the home (`+page.svelte`), category, search and admin
-  (drafts/published/rejected) pages, so every article image displays in full
-  color. Hover effects (`group-hover:scale-105`, `group-hover:opacity-100`,
-  transitions) are preserved.
-- Verified with `npm run check` (0 errors, 0 warnings).
-
-### 2026-08-14 — Color article images on detail pages (STY-24)
-
-- Removed the `grayscale` / `group-hover:grayscale-0` classes from article
-  images in `frontend/src/routes/[slug]/+page.svelte` (the detail page shown
-  when a story is opened), so the cover and related-article images display in
-  their original colors. Grayscale styling on the home, category, search and
-  admin pages is unchanged.
-- Verified with `npm run check` (0 errors, 0 warnings).
-
-### 2026-08-14 — Fixed a11y label warning (STY-17)
-
-- Associated the `COVER IMAGE URL` label with its input in the admin preview
-  editor (`frontend/src/routes/admin/preview/[id]/+page.svelte`) via
-  `for`/`id`, removing the last remaining svelte-check warning.
-- `npm run check` now reports 0 errors and 0 warnings.
-
-### 2026-08-14 — Backend-powered search (STY-22)
-
-- `getNews()` in `src/lib/api.ts` now calls the backend search endpoint
-  (`GET /api/news?q=<keyword>&page_size=20`, combinable with `?category=`) when
-  a `searchQuery` is provided, instead of fetching 100 articles and filtering
-  client-side. The redundant local search filter was removed.
-- The search page (`src/routes/search/+page.svelte`) now searches as you type
-  with a ~300ms debounce (and keeps focus), so results update without a
-  request per keystroke. Form submit still works for immediate search.
-- Search results now come from the backend across all published articles, not
-  just the 100 most recent.
-- Verified with `npm run check` (0 errors).
-
-### 2026-08-13 — Simplified category headers (by Frontend agent)
-
-- Removed the debug text `FILTER ACTIVE: INDEX_QUERY = "*"` from the category page.
-- Removed the `// CHRONICLE_INDEX` suffix from the CATEGORY header.
-- Removed the ` // RESOLVED_IMAGE` debug text suffix from the cover image source label on the article page.
-- Cleaned up tech-themed debug and double-slash snake_case labels in the admin panel.
-- Removed brackets and programmatic uppercase labels from admin navigation, action buttons, and dropdowns.
-- Cleaned up remaining technical uppercase snake_case labels like PUBLIC_SITE, metadata stats, pagination, and editor action buttons.
-- Cleaned up save thresholds button label brackets and casing in the admin settings dashboard.
-- Added a "Load More" button to the homepage news grid (`frontend/src/routes/+page.svelte`) that displays up to 15 items initially, appends 15 more items reactively per click, and resets when switching categories.
-- Implemented inline "Hide Feed" buttons and a fixed floating "Collapse Feed" FAB on the homepage (`frontend/src/routes/+page.svelte`) that resets the visible count to 15 and smoothly scrolls back to the top of the news grid.
-- Refactored the About page (`frontend/src/routes/about/+page.svelte`) to remove the system architecture section, clean up headers/labels, and format texts professionally.
-- Removed the `SYS_STATUS: ACTIVE` and `LATENCY: 1.2MS` debug metrics container from the global layout footer (`frontend/src/routes/+layout.svelte`).
-- Verified with `npm run check` (0 errors) and formatted with Prettier.
-
-### 2026-08-13 — Trending / most-read articles (by Codex agent)
-
-- New `TrendingNews.svelte` component fetching
-  `GET /api/news/trending?window=week&limit=5`, rendered on the homepage
-  (ranking 01-05 with view counts, loading/no-data/error states).
-- Article detail pages now fire a fire-and-forget
-  `POST /api/news/{id}/view` on mount with a per-browser `nw_viewer_id` from
-  localStorage.
-- `News` interface in `mockData.ts` gained `view_count: number`.
-
-### 2026-08-13 — Responsive 5-column grid (by Codex agent)
-
-- Home (`+page.svelte`), category (`category/[slug]/+page.svelte`) and search
-  (`search/+page.svelte`) news grids now render **5 columns on very wide
-  screens** via `2xl:grid-cols-5`. Mobile stays 1 column, tablet 2, desktop 3.
-- Verified with `npm run check` (0 errors).
-
-### Known open issues
-
-- None. `npm run check` is clean (0 errors, 0 warnings).
-
-### Resolved
-
-- **Fixed a11y label warning (STY-17).** The `COVER IMAGE URL` label in
-  `admin/preview/[id]/+page.svelte` is now associated with its input via
-  `for`/`id`, removing the last remaining svelte-check warning.
-- **Removed mock fallback and dummy cover images (STY-16).** The four
-  `/images/*.jpg` 404s came from the initial template's `mockNews` data, which
-  was only used as a fallback when the backend returned no published articles.
-  `getNews()` in `src/lib/api.ts` no longer falls back to `mockNews`, and
-  `mockNews` was removed from `src/lib/mockData.ts` (only `mockCategories`
-  remains, still used as the category fallback). Empty feeds now render a real
-  empty state instead of broken images.
+```
+frontend/
+├── src/
+│   ├── lib/
+│   │   ├── api.ts              # REST API client & fetch helpers
+│   │   ├── components/         # Shared UI components (Trending, Progress, Image)
+│   │   ├── stores.ts           # Svelte stores & reactive state
+│   │   └── types.ts            # TypeScript interfaces & models
+│   └── routes/
+│       ├── +error.svelte       # Custom 404/500 error page
+│       ├── +layout.svelte      # Root layout, navigation header, and footer
+│       ├── +page.svelte        # Homepage news feed & portal
+│       ├── [slug]/             # Article detail page
+│       ├── category/[slug]/    # Category news feed
+│       ├── search/             # Debounced search page
+│       ├── about/              # About editorial platform
+│       ├── copyright/          # Copyright & fair-use notice
+│       └── admin/              # Admin moderation suite
+│           ├── +layout.svelte  # Admin shell & navigation
+│           ├── +page.svelte    # Admin dashboard & scheduler controls
+│           ├── login/          # Bearer auth login page
+│           ├── drafts/         # Draft review & value scoring
+│           ├── published/      # Published articles management
+│           ├── rejected/       # Rejected articles archive
+│           ├── sources/        # RSS feed source manager
+│           ├── analytics/      # Analytics dashboard
+│           └── preview/[id]/   # Article editor & image upload
+├── static/                     # Favicon, robots.txt, and static assets
+├── package.json                # NPM dependencies & verification scripts
+├── svelte.config.js            # SvelteKit configuration (adapter-static)
+├── tsconfig.json               # TypeScript configuration
+└── vite.config.ts              # Vite & Tailwind CSS 4 configuration
+```

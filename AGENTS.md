@@ -9,8 +9,12 @@ This file defines the persistent rules, verification protocols, and coding stand
 Before creating any `git commit`, pushing to remote, or proposing a Pull Request, **ALL** verification steps below MUST be executed locally and pass with Exit Code 0.
 
 ### 1.1 Backend Verification Suite
-Navigate to `backend/` and execute:
+Navigate to `backend/` and execute `make verify` (or the explicit command sequence below):
 ```bash
+# Single-command verification shortcut:
+make verify
+
+# Or manual execution sequence:
 # 1. Format code and verify 0 unformatted files exist
 gofmt -w . && gofmt -l .
 
@@ -25,8 +29,12 @@ go test -count=1 -v ./...
 - `go vet` and `go test` MUST exit with 0.
 
 ### 1.2 Frontend Verification Suite
-Navigate to `frontend/` and execute:
+Navigate to `frontend/` and execute `npm run verify` (or the explicit command sequence below):
 ```bash
+# Single-command verification shortcut:
+npm run verify
+
+# Or manual execution sequence:
 # 1. Code style formatting and linting (Prettier + ESLint)
 npm run format && npm run lint
 
@@ -78,9 +86,43 @@ Before proposing a commit or Pull Request, the agent/developer MUST execute live
 
 ## 3. Developer & Git Guardrails
 
+### 3.1 Feature Branching Strategy (MANDATORY)
+1. **Base & Target Branch**:
+   - `main` is the single source of truth for stable production code.
+   - All tasks (features, bug fixes, refactors, docs, security fixes, CI) MUST branch off the latest `main`.
+2. **Branch Naming Standard (Kebab-Case)**:
+   - Features: `feat/<feature-name>` (e.g. `feat/interactive-cluster-ui`)
+   - Bug fixes: `fix/<bug-name>` (e.g. `fix/legacy-schema-migration`)
+   - Documentation & Rules: `docs/<topic>` (e.g. `docs/git-branching-strategy`)
+   - Refactoring: `refactor/<component>` (e.g. `refactor/news-repository`)
+   - Security Hardening: `security/<scope>` (e.g. `security/ssrf-safedialer`)
+   - CI & Tooling: `ci/<pipeline>` (e.g. `ci/github-multi-template`)
+3. **Workflow Lifecycle**:
+   1. `git checkout main && git pull origin main`
+   2. `git checkout -b <type>/<kebab-case-name>`
+   3. Develop & execute mandatory local verification suite + live localhost E2E smoke test.
+   4. Obtain explicit user confirmation before committing.
+   5. `git push origin <type>/<kebab-case-name>`
+   6. Open Pull Request with target `base: main` using the appropriate PR template.
+   7. Confirm all GitHub Actions CI checks pass with 100% green status.
+
+### 3.2 Permissions & Scope Lock Invariants
 1. **Explicit Permission Required**:
    - NEVER execute `git commit`, `git push`, or create a Pull Request without explicit confirmation from the user.
-2. **Target Branch Awareness**:
-   - Active development branch is `development`. Base target for Pull Requests is `main`.
-3. **Scope Lock**:
+2. **Scope Lock Invariant**:
    - Limit code modifications strictly to the task requested. Avoid speculative refactoring or style churn outside the feature scope.
+
+### 3.3 Mandatory GPG-Signed Commits Invariant (STRICT)
+1. **Zero Unsigned Commits**:
+   - ALL commits in this repository MUST be cryptographically signed with GPG (`commit.gpgsign=true`).
+   - **STRICT PROHIBITION**: NEVER bypass, suppress, or disable GPG signing using `--no-gpg-sign` under any circumstances.
+2. **Interactive GPG / Passphrase Block Procedure**:
+   - If a `git commit` process pauses, hangs, or fails due to GPG signing (e.g. pinentry passphrase requirement in a non-interactive shell), the agent MUST **immediately stop the commit process and ask the user directly**.
+
+### 3.4 Clean CI Monitoring & Chat Output Invariant (STRICT)
+1. **Strict Prohibition on Long-Polling / Watch Commands**:
+   - **NEVER** execute long-polling or watch commands (e.g. `gh pr checks --watch`, `gh run watch`, or interactive polling loops) that get sent to the background and cause the CLI runtime to inject `<SYSTEM_MESSAGE>` logs into the user chat.
+   - **NEVER** set redundant background timer schedules (`schedule`) solely to monitor GitHub Actions.
+2. **Synchronous Direct Verification Standard**:
+   - Check PR and workflow status via single direct queries (e.g. `gh pr checks <PR_NUMBER>` or `gh run view <RUN_ID>`) with adequate synchronous wait timeouts (`WaitMsBeforeAsync`).
+   - Present clean, human-readable PR summaries and status links directly to the user without leaving noisy background tasks running.

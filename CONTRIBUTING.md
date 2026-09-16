@@ -37,25 +37,37 @@ npm run dev                  # starts on :5173
 
 ## Branch & PR Workflow
 
-This repo uses a two-branch workflow with branch protection:
+Neuralwire follows the **Feature Branching Strategy (GitHub Flow)** off `main`:
 
 ```
-development (work freely, CI runs, no deploy)
-      │  push + open PR
-      ▼
-main (protected, CI must pass, deploys to production)
+main (protected production branch, deploys on merge)
+  │
+  ├── branch off main: feat/*, fix/*, docs/*, refactor/*, security/*, ci/*
+  │     (develop locally, run verification suite, test localhost E2E)
+  │
+  └── open Pull Request -> main (CI green + review -> merge -> deploy)
 ```
 
-1. Create a feature branch from `development`.
-2. Commit and push. CI runs on every push.
-3. Open a **Pull Request** to `main`.
-4. CI must pass:
-   - `Build, vet & test` (backend)
-   - `Install, check, lint & build` (frontend)
-5. A maintainer reviews and merges.
+### 1. Branch Naming Standard (Kebab-Case)
+- Features: `feat/<feature-name>` (e.g., `feat/interactive-cluster-ui`)
+- Bug fixes: `fix/<bug-name>` (e.g., `fix/legacy-schema-migration`)
+- Documentation: `docs/<topic>` (e.g., `docs/git-branching-strategy`)
+- Refactoring: `refactor/<component>` (e.g., `refactor/news-repository`)
+- Security Hardening: `security/<scope>` (e.g., `security/ssrf-safedialer`)
+- CI & Tooling: `ci/<pipeline>` (e.g., `ci/github-multi-template`)
 
-> `main` is protected: direct pushes are blocked and all commits must come
-> through PRs with green CI.
+### 2. Development & Verification Lifecycle
+1. Pull latest `main`: `git checkout main && git pull origin main`
+2. Create task branch: `git checkout -b <type>/<kebab-case-name>`
+3. Implement changes with minimal diff and zero error suppression.
+4. Execute mandatory local verification:
+   - Backend: `gofmt -w . && gofmt -l . && go vet ./... && go test -count=1 ./...`
+   - Frontend: `npm run format && npm run lint && npm run check && npm run build`
+   - Live Localhost Smoke Test: Boot server locally and test endpoints end-to-end.
+5. Push branch and open a **Pull Request** targeting `main` using the appropriate template in `.github/PULL_REQUEST_TEMPLATE/`.
+6. Confirm all GitHub Actions CI checks pass with 100% green status before merge.
+
+> `main` is protected: direct pushes and force-pushes are blocked. All code enters `main` via PRs with passing CI.
 
 ## Coding Standards
 
