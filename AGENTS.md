@@ -119,4 +119,10 @@ Before proposing a commit or Pull Request, the agent/developer MUST execute live
 2. **Interactive GPG / Passphrase Block Procedure**:
    - If a `git commit` process pauses, hangs, or fails due to GPG signing (e.g. pinentry passphrase requirement in a non-interactive shell), the agent MUST **immediately stop the commit process and ask the user directly**.
 
-
+### 3.4 Clean CI Monitoring & Chat Output Invariant (STRICT)
+1. **Strict Prohibition on Long-Polling / Watch Commands**:
+   - **NEVER** execute long-polling or watch commands (e.g. `gh pr checks --watch`, `gh run watch`, or interactive polling loops) that get sent to the background and cause the CLI runtime to inject `<SYSTEM_MESSAGE>` logs into the user chat.
+   - **NEVER** set redundant background timer schedules (`schedule`) solely to monitor GitHub Actions.
+2. **Synchronous Direct Verification Standard**:
+   - Check PR and workflow status via single direct queries (e.g. `gh pr checks <PR_NUMBER>` or `gh run view <RUN_ID>`) with adequate synchronous wait timeouts (`WaitMsBeforeAsync`).
+   - Present clean, human-readable PR summaries and status links directly to the user without leaving noisy background tasks running.
