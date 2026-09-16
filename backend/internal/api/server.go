@@ -236,6 +236,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/metrics", s.handleMetrics)
 	mux.HandleFunc("GET /sitemap.xml", s.handleSitemap)
 	mux.HandleFunc("GET /robots.txt", s.handleRobotsTXT)
+	mux.HandleFunc("GET /rss.xml", s.handleRSS)
+	mux.HandleFunc("GET /feed.xml", s.handleRSS)
 	mux.HandleFunc("GET /api/news", s.handleListNews)
 	mux.HandleFunc("GET /api/news/{id}", s.handleGetNews)
 	mux.HandleFunc("GET /api/news/trending", s.handleTrendingNews)
