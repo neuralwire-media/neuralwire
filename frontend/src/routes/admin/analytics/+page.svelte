@@ -35,6 +35,9 @@
 			uptime_seconds: number;
 			http_requests_total: number;
 			http_errors_total: number;
+			http_4xx_total?: number;
+			http_5xx_total?: number;
+			http_status_codes?: Record<string, number>;
 			http_avg_latency_ms: number;
 			fetch_cycles_total: number;
 			fetch_cycles_failed: number;
@@ -45,6 +48,33 @@
 			num_goroutines: number;
 		};
 	}
+
+	interface FormattedStatusCode {
+		code: string;
+		count: number;
+		percentage: string;
+		label: string;
+		category: '2xx' | '3xx' | '4xx' | '5xx' | 'other';
+		badgeClass: string;
+	}
+
+	const statusLabelMap: Record<string, string> = {
+		'200': 'OK / Success',
+		'201': 'Created',
+		'204': 'No Content',
+		'301': 'Moved Permanently',
+		'302': 'Found / Redirect',
+		'304': 'Not Modified (Cached)',
+		'400': 'Bad Request',
+		'401': 'Unauthorized (Auth)',
+		'403': 'Forbidden (CSRF/Auth)',
+		'404': 'Not Found (Bot/Scan)',
+		'429': 'Too Many Requests (Rate Limit)',
+		'500': 'Internal Server Error',
+		'502': 'Bad Gateway',
+		'503': 'Service Unavailable',
+		'504': 'Gateway Timeout'
+	};
 
 	let data = $state<AnalyticsPayload | null>(null);
 	let isLoading = $state(true);
@@ -120,11 +150,60 @@
 			: 1
 	);
 
-	const httpErrorRate = $derived(
+	const server5xxErrors = $derived(data?.system.http_5xx_total ?? 0);
+	const client4xxErrors = $derived(
+		data?.system.http_4xx_total ??
+			(data ? data.system.http_errors_total - (data.system.http_5xx_total ?? 0) : 0)
+	);
+
+	const serverErrorRate = $derived(
 		data && data.system.http_requests_total > 0
-			? ((data.system.http_errors_total / data.system.http_requests_total) * 100).toFixed(2)
+			? ((server5xxErrors / data.system.http_requests_total) * 100).toFixed(2)
 			: '0.00'
 	);
+
+	const clientErrorRate = $derived(
+		data && data.system.http_requests_total > 0
+			? ((client4xxErrors / data.system.http_requests_total) * 100).toFixed(2)
+			: '0.00'
+	);
+
+	const sortedStatusCodes = $derived.by<FormattedStatusCode[]>(() => {
+		if (!data || !data.system.http_status_codes) return [];
+		const total = data.system.http_requests_total || 1;
+		const entries = Object.entries(data.system.http_status_codes);
+
+		return entries
+			.map(([code, count]) => {
+				const numCode = parseInt(code, 10);
+				let category: '2xx' | '3xx' | '4xx' | '5xx' | 'other' = 'other';
+				let badgeClass = 'text-slate-300 border-slate-700 bg-slate-800/40';
+
+				if (numCode >= 200 && numCode < 300) {
+					category = '2xx';
+					badgeClass = 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10';
+				} else if (numCode >= 300 && numCode < 400) {
+					category = '3xx';
+					badgeClass = 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10';
+				} else if (numCode >= 400 && numCode < 500) {
+					category = '4xx';
+					badgeClass = 'text-amber-400 border-amber-500/30 bg-amber-500/10';
+				} else if (numCode >= 500) {
+					category = '5xx';
+					badgeClass = 'text-rose-400 border-rose-500/30 bg-rose-500/10';
+				}
+
+				return {
+					code,
+					count,
+					percentage: ((count / total) * 100).toFixed(1),
+					label: statusLabelMap[code] || `HTTP ${code}`,
+					category,
+					badgeClass
+				};
+			})
+			.sort((a, b) => b.count - a.count);
+	});
 
 	const fetchSuccessRate = $derived(
 		data && data.system.fetch_cycles_total > 0
@@ -249,7 +328,7 @@
 				</div>
 			</div>
 
-			<!-- HTTP Traffic & Error Rate Card -->
+			<!-- HTTP Traffic & Server Health Card -->
 			<div
 				class="group glow-hover relative flex flex-col justify-between rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0F172A]/30 p-5"
 			>
@@ -257,9 +336,19 @@
 					class="absolute top-0 left-0 h-[1px] w-full bg-gradient-to-r from-transparent via-cyan-400/30 to-transparent"
 				></div>
 				<div>
-					<span class="font-mono text-[9px] font-bold tracking-widest text-cyan-400 uppercase"
-						>HTTP Traffic</span
-					>
+					<div class="flex items-center justify-between">
+						<span class="font-mono text-[9px] font-bold tracking-widest text-cyan-400 uppercase"
+							>HTTP Traffic</span
+						>
+						<span
+							class="rounded border px-1.5 py-0.5 font-mono text-[8px] font-bold {server5xxErrors >
+							0
+								? 'border-rose-500/40 bg-rose-500/10 text-rose-400'
+								: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'}"
+						>
+							{server5xxErrors > 0 ? `${server5xxErrors} 5XX FAULT` : 'HEALTHY'}
+						</span>
+					</div>
 					<div class="mt-2 flex items-baseline space-x-2">
 						<span class="font-serif text-3xl font-medium tracking-tight text-white sm:text-4xl">
 							{data.system.http_requests_total.toLocaleString()}
@@ -268,12 +357,20 @@
 					</div>
 				</div>
 				<div
-					class="mt-4 flex items-center justify-between border-t border-[rgba(255,255,255,0.04)] pt-2 font-mono text-[10px]"
+					class="mt-4 flex flex-col gap-1 border-t border-[rgba(255,255,255,0.04)] pt-2 font-mono text-[10px]"
 				>
-					<span class="text-slate-400">Error Rate:</span>
-					<span class="font-bold {Number(httpErrorRate) > 5 ? 'text-[#E11D48]' : 'text-[#22D3EE]'}">
-						{httpErrorRate}% ({data.system.http_errors_total} err)
-					</span>
+					<div class="flex items-center justify-between">
+						<span class="text-slate-400">Server 5xx Error:</span>
+						<span class="font-bold {server5xxErrors > 0 ? 'text-[#E11D48]' : 'text-emerald-400'}">
+							{serverErrorRate}% ({server5xxErrors} err)
+						</span>
+					</div>
+					<div class="flex items-center justify-between text-[9px] text-slate-500">
+						<span>Client 4xx / Probes:</span>
+						<span class="font-medium text-slate-400">
+							{client4xxErrors.toLocaleString()} reqs ({clientErrorRate}%)
+						</span>
+					</div>
 				</div>
 			</div>
 
@@ -510,6 +607,58 @@
 						{data.system.http_avg_latency_ms} ms
 					</span>
 				</div>
+			</div>
+
+			<!-- HTTP Status Code Breakdown Grid -->
+			<div class="mt-6 border-t border-[rgba(255,255,255,0.06)] pt-4">
+				<div class="mb-3 flex items-center justify-between">
+					<span class="text-[10px] font-bold tracking-wider text-slate-400 uppercase"
+						>HTTP Response Status Code Breakdown</span
+					>
+					<span class="text-[10px] text-slate-500">
+						{sortedStatusCodes.length} status {sortedStatusCodes.length === 1 ? 'code' : 'codes'} recorded
+					</span>
+				</div>
+
+				{#if sortedStatusCodes.length === 0}
+					<div class="py-3 text-center text-[11px] text-slate-500">
+						No granular HTTP status telemetry available yet.
+					</div>
+				{:else}
+					<div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+						{#each sortedStatusCodes as item (item.code)}
+							<div
+								class="flex items-center justify-between rounded-lg border border-[rgba(255,255,255,0.04)] bg-[#070A10]/40 px-3 py-2.5"
+							>
+								<div class="flex items-center gap-2.5">
+									<span
+										class="rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold {item.badgeClass}"
+									>
+										{item.code}
+									</span>
+									<div class="flex flex-col">
+										<span class="text-[11px] font-medium text-slate-200">{item.label}</span>
+										<span class="text-[9px] text-slate-500"
+											>{item.category === '4xx'
+												? 'Client / Bot Probe'
+												: item.category === '5xx'
+													? 'Server Error'
+													: item.category === '2xx'
+														? 'Success'
+														: item.category === '3xx'
+															? 'Redirect / Cache'
+															: 'Other'}</span
+										>
+									</div>
+								</div>
+								<div class="text-right">
+									<span class="text-xs font-bold text-white">{item.count.toLocaleString()}</span>
+									<span class="block text-[9px] text-slate-400">{item.percentage}%</span>
+								</div>
+							</div>
+						{/each}
+					</div>
+				{/if}
 			</div>
 		</div>
 	{/if}
