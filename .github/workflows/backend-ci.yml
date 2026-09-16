@@ -34,6 +34,7 @@ jobs:
           filters: |
             backend:
               - 'backend/**'
+              - '!backend/**/*.md'
               - '.github/workflows/backend-ci.yml'
               - 'docker-compose.yml'
               - 'Dockerfile'
