@@ -30,11 +30,20 @@ type Metrics struct {
 
 	aiCalls       atomic.Int64
 	aiCallsFailed atomic.Int64
+
+	aiPromptTokens     atomic.Int64
+	aiCompletionTokens atomic.Int64
+	aiTotalTokens      atomic.Int64
+	aiTokensByModelMu  sync.Mutex
+	aiTokensByModel    map[string]*atomic.Int64
 }
 
 // New returns an empty Metrics collector.
 func New() *Metrics {
-	return &Metrics{httpRequests: make(map[string]*atomic.Int64)}
+	return &Metrics{
+		httpRequests:    make(map[string]*atomic.Int64),
+		aiTokensByModel: make(map[string]*atomic.Int64),
+	}
 }
 
 // HTTPRequest records one finished request with its status code.
@@ -93,18 +102,55 @@ func (m *Metrics) AICall(failed bool) {
 	}
 }
 
+// AITokens records prompt, completion, and total tokens used by an AI call.
+func (m *Metrics) AITokens(promptTokens, completionTokens, totalTokens int, model string) {
+	if m == nil {
+		return
+	}
+	if promptTokens > 0 {
+		m.aiPromptTokens.Add(int64(promptTokens))
+	}
+	if completionTokens > 0 {
+		m.aiCompletionTokens.Add(int64(completionTokens))
+	}
+	if totalTokens > 0 {
+		m.aiTotalTokens.Add(int64(totalTokens))
+	} else if promptTokens > 0 || completionTokens > 0 {
+		m.aiTotalTokens.Add(int64(promptTokens + completionTokens))
+	}
+
+	if model != "" {
+		m.aiTokensByModelMu.Lock()
+		c, ok := m.aiTokensByModel[model]
+		if !ok {
+			c = &atomic.Int64{}
+			m.aiTokensByModel[model] = c
+		}
+		m.aiTokensByModelMu.Unlock()
+		if totalTokens > 0 {
+			c.Add(int64(totalTokens))
+		} else {
+			c.Add(int64(promptTokens + completionTokens))
+		}
+	}
+}
+
 // Snapshot holds a point-in-time copy of metrics counters.
 type Snapshot struct {
-	HTTPRequestsTotal int64            `json:"http_requests_total"`
-	HTTPErrorsTotal   int64            `json:"http_errors_total"`
-	HTTP4xxTotal      int64            `json:"http_4xx_total"`
-	HTTP5xxTotal      int64            `json:"http_5xx_total"`
-	HTTPStatusCodes   map[string]int64 `json:"http_status_codes"`
-	HTTPAvgLatencyMs  float64          `json:"http_avg_latency_ms"`
-	FetchCyclesTotal  int64            `json:"fetch_cycles_total"`
-	FetchCyclesFailed int64            `json:"fetch_cycles_failed"`
-	AICallsTotal      int64            `json:"ai_calls_total"`
-	AICallsFailed     int64            `json:"ai_calls_failed"`
+	HTTPRequestsTotal  int64            `json:"http_requests_total"`
+	HTTPErrorsTotal    int64            `json:"http_errors_total"`
+	HTTP4xxTotal       int64            `json:"http_4xx_total"`
+	HTTP5xxTotal       int64            `json:"http_5xx_total"`
+	HTTPStatusCodes    map[string]int64 `json:"http_status_codes"`
+	HTTPAvgLatencyMs   float64          `json:"http_avg_latency_ms"`
+	FetchCyclesTotal   int64            `json:"fetch_cycles_total"`
+	FetchCyclesFailed  int64            `json:"fetch_cycles_failed"`
+	AICallsTotal       int64            `json:"ai_calls_total"`
+	AICallsFailed      int64            `json:"ai_calls_failed"`
+	AIPromptTokens     int64            `json:"ai_prompt_tokens"`
+	AICompletionTokens int64            `json:"ai_completion_tokens"`
+	AITotalTokens      int64            `json:"ai_total_tokens"`
+	AITokensByModel    map[string]int64 `json:"ai_tokens_by_model"`
 }
 
 // Snapshot returns a structured copy of the current metrics.
@@ -125,6 +171,13 @@ func (m *Metrics) Snapshot() Snapshot {
 	}
 	m.httpRequestsMu.Unlock()
 
+	tokensByModel := make(map[string]int64)
+	m.aiTokensByModelMu.Lock()
+	for k, c := range m.aiTokensByModel {
+		tokensByModel[k] = c.Load()
+	}
+	m.aiTokensByModelMu.Unlock()
+
 	var avgLatency float64
 	count := m.reqCount.Load()
 	if count > 0 {
@@ -132,16 +185,20 @@ func (m *Metrics) Snapshot() Snapshot {
 	}
 
 	return Snapshot{
-		HTTPRequestsTotal: totalReqs,
-		HTTPErrorsTotal:   m.httpErrors.Load(),
-		HTTP4xxTotal:      m.http4xxErrors.Load(),
-		HTTP5xxTotal:      m.http5xxErrors.Load(),
-		HTTPStatusCodes:   statusCodes,
-		HTTPAvgLatencyMs:  avgLatency,
-		FetchCyclesTotal:  m.fetchCycles.Load(),
-		FetchCyclesFailed: m.fetchCyclesFailed.Load(),
-		AICallsTotal:      m.aiCalls.Load(),
-		AICallsFailed:     m.aiCallsFailed.Load(),
+		HTTPRequestsTotal:  totalReqs,
+		HTTPErrorsTotal:    m.httpErrors.Load(),
+		HTTP4xxTotal:       m.http4xxErrors.Load(),
+		HTTP5xxTotal:       m.http5xxErrors.Load(),
+		HTTPStatusCodes:    statusCodes,
+		HTTPAvgLatencyMs:   avgLatency,
+		FetchCyclesTotal:   m.fetchCycles.Load(),
+		FetchCyclesFailed:  m.fetchCyclesFailed.Load(),
+		AICallsTotal:       m.aiCalls.Load(),
+		AICallsFailed:      m.aiCallsFailed.Load(),
+		AIPromptTokens:     m.aiPromptTokens.Load(),
+		AICompletionTokens: m.aiCompletionTokens.Load(),
+		AITotalTokens:      m.aiTotalTokens.Load(),
+		AITokensByModel:    tokensByModel,
 	}
 }
 
@@ -210,4 +267,16 @@ func (m *Metrics) WritePrometheus(w io.Writer) {
 	fmt.Fprintln(w, "# HELP neuralwire_ai_calls_failed_total Upstream AI requests that failed.")
 	fmt.Fprintln(w, "# TYPE neuralwire_ai_calls_failed_total counter")
 	fmt.Fprintf(w, "neuralwire_ai_calls_failed_total %d\n", m.aiCallsFailed.Load())
+
+	fmt.Fprintln(w, "# HELP neuralwire_ai_tokens_total Total tokens processed by AI models.")
+	fmt.Fprintln(w, "# TYPE neuralwire_ai_tokens_total counter")
+	fmt.Fprintf(w, "neuralwire_ai_tokens_total %d\n", m.aiTotalTokens.Load())
+
+	fmt.Fprintln(w, "# HELP neuralwire_ai_prompt_tokens_total Total prompt tokens sent to AI models.")
+	fmt.Fprintln(w, "# TYPE neuralwire_ai_prompt_tokens_total counter")
+	fmt.Fprintf(w, "neuralwire_ai_prompt_tokens_total %d\n", m.aiPromptTokens.Load())
+
+	fmt.Fprintln(w, "# HELP neuralwire_ai_completion_tokens_total Total completion tokens generated by AI models.")
+	fmt.Fprintln(w, "# TYPE neuralwire_ai_completion_tokens_total counter")
+	fmt.Fprintf(w, "neuralwire_ai_completion_tokens_total %d\n", m.aiCompletionTokens.Load())
 }

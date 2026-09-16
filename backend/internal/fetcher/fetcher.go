@@ -29,6 +29,11 @@ type SourceStore interface {
 	UpdateLastFetched(id int64, t time.Time) error
 }
 
+// DiagnosticSourceStore is an optional interface implemented by source stores that support detailed diagnostic tracking.
+type DiagnosticSourceStore interface {
+	RecordFetchResult(id int64, t time.Time, durationMs int64, httpStatus int, itemsYielded int, fetchErr string) error
+}
+
 // NewsStore is the subset of news persistence the fetcher needs.
 type NewsStore interface {
 	ExistsByURL(url string) (bool, error)
@@ -272,14 +277,38 @@ func (f *Fetcher) FetchAll(ctx context.Context) (FetchStats, error) {
 }
 
 func (f *Fetcher) fetchSource(ctx context.Context, src models.RSSSource) (SourceStats, error) {
+	start := time.Now()
 	if err := f.throttle(ctx); err != nil {
+		durationMs := time.Since(start).Milliseconds()
+		f.recordSourceResult(src.ID, start, durationMs, 0, 0, err.Error())
 		return SourceStats{Name: src.Name, Error: err.Error()}, err
 	}
 	feed, err := f.parser.ParseURLWithContext(src.URL, ctx)
 	if err != nil {
+		durationMs := time.Since(start).Milliseconds()
+		f.recordSourceResult(src.ID, start, durationMs, 0, 0, err.Error())
 		return SourceStats{Name: src.Name, Error: err.Error()}, err
 	}
-	return f.processFeed(ctx, src, feed)
+	stats, pErr := f.processFeed(ctx, src, feed)
+	durationMs := time.Since(start).Milliseconds()
+	errStr := ""
+	if pErr != nil {
+		errStr = pErr.Error()
+	}
+	f.recordSourceResult(src.ID, start, durationMs, 200, stats.Inserted, errStr)
+	return stats, pErr
+}
+
+func (f *Fetcher) recordSourceResult(id int64, t time.Time, durationMs int64, httpStatus int, itemsYielded int, fetchErr string) {
+	if diag, ok := f.sources.(DiagnosticSourceStore); ok {
+		if err := diag.RecordFetchResult(id, t, durationMs, httpStatus, itemsYielded, fetchErr); err != nil {
+			f.logger.Warn("fetcher: record diagnostic fetch result failed", "id", id, "error", err)
+		}
+		return
+	}
+	if err := f.sources.UpdateLastFetched(id, t); err != nil {
+		f.logger.Warn("fetcher: update last_fetched failed", "id", id, "error", err)
+	}
 }
 
 // processFeed turns parsed feed items into draft articles. For each new
@@ -449,9 +478,6 @@ func (f *Fetcher) processFeed(ctx context.Context, src models.RSSSource, feed *g
 	stats.Fallback = fallback
 	stats.SkippedLowQuality = skippedLowQuality
 
-	if err := f.sources.UpdateLastFetched(src.ID, time.Now()); err != nil {
-		f.logger.Error("fetcher: update last_fetched failed", "source", src.Name, "error", err)
-	}
 	f.logger.Info("fetcher: source fetch complete",
 		"source", src.Name,
 		"inserted", inserted,

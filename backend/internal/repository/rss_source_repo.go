@@ -21,7 +21,10 @@ func NewRSSSourceRepository(db *sql.DB) *RSSSourceRepository {
 // ListEnabled returns all feeds that should be polled.
 func (r *RSSSourceRepository) ListEnabled() ([]models.RSSSource, error) {
 	rows, err := r.db.Query(`
-		SELECT id, name, url, category, enabled, last_fetched_at, created_at
+		SELECT id, name, url, category, enabled, last_fetched_at,
+		       COALESCE(last_duration_ms, 0), COALESCE(last_http_status, 0),
+		       COALESCE(last_error, ''), COALESCE(consecutive_failures, 0),
+		       COALESCE(total_items_yielded, 0), created_at
 		FROM rss_sources
 		WHERE enabled = 1
 		ORDER BY name ASC`,
@@ -38,7 +41,9 @@ func (r *RSSSourceRepository) ListEnabled() ([]models.RSSSource, error) {
 		var lastFetched sql.NullString
 		var createdAt string
 		if err := rows.Scan(
-			&s.ID, &s.Name, &s.URL, &s.Category, &enabled, &lastFetched, &createdAt,
+			&s.ID, &s.Name, &s.URL, &s.Category, &enabled, &lastFetched,
+			&s.LastDurationMs, &s.LastHTTPStatus, &s.LastError,
+			&s.ConsecutiveFailures, &s.TotalItemsYielded, &createdAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan rss source: %w", err)
 		}
@@ -74,10 +79,53 @@ func (r *RSSSourceRepository) UpdateLastFetched(id int64, t time.Time) error {
 	return nil
 }
 
+// RecordFetchResult updates a source's polling diagnostics.
+func (r *RSSSourceRepository) RecordFetchResult(id int64, t time.Time, durationMs int64, httpStatus int, itemsYielded int, fetchErr string) error {
+	var errStr string
+	if fetchErr != "" {
+		errStr = fetchErr
+	}
+	if fetchErr != "" || (httpStatus != 0 && httpStatus >= 400) {
+		_, err := r.db.Exec(`
+			UPDATE rss_sources
+			SET last_fetched_at = ?,
+			    last_duration_ms = ?,
+			    last_http_status = ?,
+			    last_error = ?,
+			    consecutive_failures = consecutive_failures + 1,
+			    total_items_yielded = total_items_yielded + ?
+			WHERE id = ?`,
+			t.UTC().Format(time.RFC3339), durationMs, httpStatus, errStr, itemsYielded, id,
+		)
+		if err != nil {
+			return fmt.Errorf("record fetch failure: %w", err)
+		}
+	} else {
+		_, err := r.db.Exec(`
+			UPDATE rss_sources
+			SET last_fetched_at = ?,
+			    last_duration_ms = ?,
+			    last_http_status = ?,
+			    last_error = '',
+			    consecutive_failures = 0,
+			    total_items_yielded = total_items_yielded + ?
+			WHERE id = ?`,
+			t.UTC().Format(time.RFC3339), durationMs, httpStatus, itemsYielded, id,
+		)
+		if err != nil {
+			return fmt.Errorf("record fetch success: %w", err)
+		}
+	}
+	return nil
+}
+
 // ListAll returns all configured RSS sources.
 func (r *RSSSourceRepository) ListAll() ([]models.RSSSource, error) {
 	rows, err := r.db.Query(`
-		SELECT id, name, url, category, enabled, last_fetched_at, created_at
+		SELECT id, name, url, category, enabled, last_fetched_at,
+		       COALESCE(last_duration_ms, 0), COALESCE(last_http_status, 0),
+		       COALESCE(last_error, ''), COALESCE(consecutive_failures, 0),
+		       COALESCE(total_items_yielded, 0), created_at
 		FROM rss_sources
 		ORDER BY category ASC, name ASC`,
 	)
@@ -93,7 +141,9 @@ func (r *RSSSourceRepository) ListAll() ([]models.RSSSource, error) {
 		var lastFetched sql.NullString
 		var createdAt string
 		if err := rows.Scan(
-			&s.ID, &s.Name, &s.URL, &s.Category, &enabled, &lastFetched, &createdAt,
+			&s.ID, &s.Name, &s.URL, &s.Category, &enabled, &lastFetched,
+			&s.LastDurationMs, &s.LastHTTPStatus, &s.LastError,
+			&s.ConsecutiveFailures, &s.TotalItemsYielded, &createdAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan rss source: %w", err)
 		}
@@ -126,10 +176,17 @@ func (r *RSSSourceRepository) GetByID(id int64) (*models.RSSSource, error) {
 	var createdAt string
 
 	err := r.db.QueryRow(`
-		SELECT id, name, url, category, enabled, last_fetched_at, created_at
+		SELECT id, name, url, category, enabled, last_fetched_at,
+		       COALESCE(last_duration_ms, 0), COALESCE(last_http_status, 0),
+		       COALESCE(last_error, ''), COALESCE(consecutive_failures, 0),
+		       COALESCE(total_items_yielded, 0), created_at
 		FROM rss_sources
 		WHERE id = ?`, id,
-	).Scan(&s.ID, &s.Name, &s.URL, &s.Category, &enabled, &lastFetched, &createdAt)
+	).Scan(
+		&s.ID, &s.Name, &s.URL, &s.Category, &enabled, &lastFetched,
+		&s.LastDurationMs, &s.LastHTTPStatus, &s.LastError,
+		&s.ConsecutiveFailures, &s.TotalItemsYielded, &createdAt,
+	)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil

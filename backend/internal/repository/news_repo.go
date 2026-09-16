@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -720,12 +721,24 @@ type ScoreDistribution struct {
 	Low    int64 `json:"low"`
 }
 
+// PipelineFunnel contains auto-publish conversion and funnel metrics.
+type PipelineFunnel struct {
+	TotalArticles  int64   `json:"total_articles"`
+	DraftsCount    int64   `json:"drafts_count"`
+	ScoredCount    int64   `json:"scored_count"`
+	PublishedCount int64   `json:"published_count"`
+	RejectedCount  int64   `json:"rejected_count"`
+	ConversionRate float64 `json:"conversion_rate"`
+	HighValueRatio float64 `json:"high_value_ratio"`
+}
+
 // AnalyticsData contains aggregated engagement and content metrics.
 type AnalyticsData struct {
 	TotalViews           int64             `json:"total_views"`
 	TopArticles          []TopArticle      `json:"top_articles"`
 	CategoryDistribution []CategoryCount   `json:"category_distribution"`
 	ScoreDistribution    ScoreDistribution `json:"score_distribution"`
+	Funnel               PipelineFunnel    `json:"funnel"`
 	DraftsCount          int64             `json:"drafts_count"`
 	PublishedCount       int64             `json:"published_count"`
 	RejectedCount        int64             `json:"rejected_count"`
@@ -814,6 +827,26 @@ func (r *NewsRepository) GetAnalytics(topLimit int) (*AnalyticsData, error) {
 				}
 			}
 		}
+	}
+
+	// 6. Pipeline funnel metrics
+	totalArticles := data.DraftsCount + data.PublishedCount + data.RejectedCount
+	scoredCount := data.ScoreDistribution.High + data.ScoreDistribution.Medium + data.ScoreDistribution.Low
+	var convRate, highRatio float64
+	if totalArticles > 0 {
+		convRate = math.Round((float64(data.PublishedCount)/float64(totalArticles))*10000) / 100
+	}
+	if scoredCount > 0 {
+		highRatio = math.Round((float64(data.ScoreDistribution.High)/float64(scoredCount))*10000) / 100
+	}
+	data.Funnel = PipelineFunnel{
+		TotalArticles:  totalArticles,
+		DraftsCount:    data.DraftsCount,
+		ScoredCount:    scoredCount,
+		PublishedCount: data.PublishedCount,
+		RejectedCount:  data.RejectedCount,
+		ConversionRate: convRate,
+		HighValueRatio: highRatio,
 	}
 
 	return data, nil

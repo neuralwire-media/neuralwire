@@ -131,6 +131,7 @@ func doChatCompletion(
 		return "", false, true
 	}
 	recordAICall(false)
+	recordAITokens(parsed.Usage.PromptTokens, parsed.Usage.CompletionTokens, parsed.Usage.TotalTokens, model)
 	return strings.TrimSpace(parsed.Choices[0].Message.Content), true, false
 }
 
