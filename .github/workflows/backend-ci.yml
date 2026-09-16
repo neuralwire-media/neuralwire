@@ -5,6 +5,8 @@ name: Backend CI
 # when changes are frontend-only to satisfy required branch protection checks quickly.
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
