@@ -1748,6 +1748,12 @@ func TestAdminAnalytics(t *testing.T) {
 	if resp.System.MemoryAllocMB <= 0 {
 		t.Errorf("memory_alloc_mb = %f, want > 0", resp.System.MemoryAllocMB)
 	}
+	if resp.System.HTTPRequestsTotal <= 0 {
+		t.Errorf("http_requests_total = %d, want > 0", resp.System.HTTPRequestsTotal)
+	}
+	if resp.System.HTTPStatusCodes == nil {
+		t.Errorf("http_status_codes map is nil")
+	}
 }
 
 func TestAdminSourcesCRUD(t *testing.T) {
