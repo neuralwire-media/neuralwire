@@ -1,6 +1,6 @@
 module neuralwire/backend
 
-go 1.26.0
+go 1.26.2
 
 require (
 	codeberg.org/readeck/go-readability/v2 v2.1.2
