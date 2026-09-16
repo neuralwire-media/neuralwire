@@ -3,6 +3,7 @@
 	import type { News } from '$lib/mockData';
 	import { goto } from '$app/navigation';
 	import Image from '$lib/Image.svelte';
+	import BookmarkButton from '$lib/BookmarkButton.svelte';
 	import { getSiteUrl } from '$lib/siteUrl';
 
 	let { data }: { data: PageData } = $props();
@@ -143,6 +144,13 @@
 							alt={post.title}
 							class="h-full w-full object-cover opacity-75 transition-all duration-550 group-hover:scale-105 group-hover:opacity-100"
 						/>
+						<div class="absolute top-2 right-2">
+							<BookmarkButton
+								article={post}
+								size="sm"
+								class="rounded border border-white/10 bg-[#0A0E17]/90 p-1 backdrop-blur-sm hover:border-[#22D3EE]/50 hover:bg-[#0A0E17]"
+							/>
+						</div>
 					</a>
 
 					<!-- Card Body -->
