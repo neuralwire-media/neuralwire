@@ -21,6 +21,7 @@ import (
 
 	"github.com/mmcdole/gofeed"
 
+	"neuralwire/backend/internal/ai"
 	"neuralwire/backend/internal/backup"
 	"neuralwire/backend/internal/models"
 	"neuralwire/backend/internal/netutil"
@@ -948,6 +949,11 @@ func (s *Server) handleCreateNews(w http.ResponseWriter, r *http.Request) {
 		s.logger.Printf("api: ensure category %q: %v", req.Category, err)
 	}
 
+	imageURL := req.ImageURL
+	if imageURL == "" {
+		imageURL = ai.GetCuratedTechImage(req.Category, req.Title)
+	}
+
 	article := models.News{
 		Title:    req.Title,
 		URL:      req.URL,
@@ -955,7 +961,7 @@ func (s *Server) handleCreateNews(w http.ResponseWriter, r *http.Request) {
 		Category: req.Category,
 		Summary:  req.Summary,
 		Content:  req.Content,
-		ImageURL: req.ImageURL,
+		ImageURL: imageURL,
 		Status:   models.StatusDraft,
 	}
 

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -24,8 +25,8 @@ func TestImageGeneratorDisabledSkipsGeneration(t *testing.T) {
 	if called {
 		t.Error("disabled image generator should not call upstream")
 	}
-	if got != "" {
-		t.Errorf("expected empty string fallback, got %q", got)
+	if got == "" || !strings.HasPrefix(got, "https://images.unsplash.com/") {
+		t.Errorf("expected curated Unsplash fallback URL, got %q", got)
 	}
 }
 

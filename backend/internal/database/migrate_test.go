@@ -110,3 +110,36 @@ func TestMigrate_Idempotent(t *testing.T) {
 		t.Fatalf("Third Migrate failed (idempotency check): %v", err)
 	}
 }
+
+func TestMigrate_BackfillMissingImages(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "backfill.db")
+	db, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer db.Close()
+
+	if err := Migrate(db); err != nil {
+		t.Fatalf("Initial Migrate failed: %v", err)
+	}
+
+	// Insert an article with an empty image_url
+	_, err = db.Exec(`INSERT INTO news (title, slug, url, category, image_url) VALUES ('ArXiv Paper Title', 'arxiv-paper', 'https://arxiv.org/abs/1234', 'research', '')`)
+	if err != nil {
+		t.Fatalf("Insert news with empty image failed: %v", err)
+	}
+
+	// Running Migrate again should backfill the empty image_url with a curated stock image
+	if err := Migrate(db); err != nil {
+		t.Fatalf("Migrate backfill failed: %v", err)
+	}
+
+	var img string
+	err = db.QueryRow(`SELECT image_url FROM news WHERE slug = 'arxiv-paper'`).Scan(&img)
+	if err != nil {
+		t.Fatalf("Query image_url failed: %v", err)
+	}
+	if img == "" {
+		t.Errorf("expected backfilled image_url, got empty string")
+	}
+}
