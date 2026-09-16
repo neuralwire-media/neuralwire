@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import type { PageData } from './$types';
 	import type { News } from '$lib/mockData';
 	import Image from '$lib/Image.svelte';
@@ -265,15 +264,23 @@
 		return generated;
 	}
 
-	onMount(() => {
-		const viewerKey = getViewerKey();
-		fetch(`${BASE_URL}/news/${article.id}/view`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ viewer_key: viewerKey })
-		}).catch((error) => {
-			console.warn('view tracking failed', error);
-		});
+	let lastTrackedArticleId = $state<number | null>(null);
+
+	$effect(() => {
+		const currentId = article?.id;
+		if (currentId && currentId !== lastTrackedArticleId) {
+			lastTrackedArticleId = currentId;
+			if (typeof window !== 'undefined') {
+				const viewerKey = getViewerKey();
+				fetch(`${BASE_URL}/news/${currentId}/view`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ viewer_key: viewerKey })
+				}).catch((error) => {
+					console.warn('view tracking failed', error);
+				});
+			}
+		}
 	});
 </script>
 

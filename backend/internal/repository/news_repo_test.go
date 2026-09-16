@@ -125,3 +125,131 @@ func TestClusteringRepositoryOperations(t *testing.T) {
 		t.Errorf("expected id2 to be primary after switch")
 	}
 }
+
+func TestAutoPublishCandidatesCaseInsensitive(t *testing.T) {
+	repo := newTestDB(t)
+
+	// Create 3 draft articles with different value_labels
+	_, err := repo.Create(models.News{
+		Title:      "Article High 1",
+		URL:        "https://example.com/high-1",
+		Category:   "ai",
+		ValueLabel: "HIGH",
+	})
+	if err != nil {
+		t.Fatalf("create high 1: %v", err)
+	}
+
+	_, err = repo.Create(models.News{
+		Title:      "Article Medium 1",
+		URL:        "https://example.com/med-1",
+		Category:   "tools",
+		ValueLabel: "MEDIUM",
+	})
+	if err != nil {
+		t.Fatalf("create med 1: %v", err)
+	}
+
+	_, err = repo.Create(models.News{
+		Title:      "Article Low 1",
+		URL:        "https://example.com/low-1",
+		Category:   "research",
+		ValueLabel: "LOW",
+	})
+	if err != nil {
+		t.Fatalf("create low 1: %v", err)
+	}
+
+	// 1. Query with uppercase labels
+	candidates, err := repo.AutoPublishCandidates(nil, []string{"HIGH"}, 10)
+	if err != nil {
+		t.Fatalf("auto publish candidates uppercase: %v", err)
+	}
+	if len(candidates) != 1 || candidates[0].ValueLabel != "HIGH" {
+		t.Errorf("expected 1 HIGH candidate with uppercase query, got %d", len(candidates))
+	}
+
+	// 2. Query with lowercase labels
+	candidates, err = repo.AutoPublishCandidates(nil, []string{"high"}, 10)
+	if err != nil {
+		t.Fatalf("auto publish candidates lowercase: %v", err)
+	}
+	if len(candidates) != 1 || candidates[0].ValueLabel != "HIGH" {
+		t.Errorf("expected 1 HIGH candidate with lowercase query, got %d", len(candidates))
+	}
+
+	// 3. Query with mixed-case labels and categories
+	candidates, err = repo.AutoPublishCandidates([]string{"AI", "Tools"}, []string{"High", "Medium"}, 10)
+	if err != nil {
+		t.Fatalf("auto publish candidates mixed: %v", err)
+	}
+	if len(candidates) != 2 {
+		t.Errorf("expected 2 candidates with mixed query, got %d", len(candidates))
+	}
+}
+
+func TestDeleteCleansUpArticleViews(t *testing.T) {
+	repo := newTestDB(t)
+
+	id, err := repo.Create(models.News{
+		Title:    "Test News For Deletion",
+		URL:      "https://example.com/delete-test",
+		Category: "ai",
+	})
+	if err != nil {
+		t.Fatalf("create news: %v", err)
+	}
+
+	// Record views
+	if err := repo.RecordView(id, "viewer-1"); err != nil {
+		t.Fatalf("record view 1: %v", err)
+	}
+	if err := repo.RecordView(id, "viewer-2"); err != nil {
+		t.Fatalf("record view 2: %v", err)
+	}
+
+	// Verify analytics has 2 views
+	analytics, err := repo.GetAnalytics(5)
+	if err != nil || analytics.TotalViews != 2 {
+		t.Fatalf("expected total views = 2, got %d (err: %v)", analytics.TotalViews, err)
+	}
+
+	// Delete article
+	if err := repo.Delete(id); err != nil {
+		t.Fatalf("delete news: %v", err)
+	}
+
+	// Verify article views table is clean
+	var count int
+	_ = repo.db.QueryRow(`SELECT COUNT(*) FROM article_views WHERE news_id = ?`, id).Scan(&count)
+	if count != 0 {
+		t.Errorf("expected 0 orphaned views after delete, got %d", count)
+	}
+
+	// Verify analytics total views is now 0
+	analytics, err = repo.GetAnalytics(5)
+	if err != nil || analytics.TotalViews != 0 {
+		t.Errorf("expected total views = 0 after delete, got %d", analytics.TotalViews)
+	}
+}
+
+func TestBulkDeleteCleansUpArticleViews(t *testing.T) {
+	repo := newTestDB(t)
+
+	id1, _ := repo.Create(models.News{Title: "News 1", URL: "https://example.com/1", Category: "ai"})
+	id2, _ := repo.Create(models.News{Title: "News 2", URL: "https://example.com/2", Category: "tools"})
+
+	_ = repo.RecordView(id1, "v1")
+	_ = repo.RecordView(id2, "v2")
+
+	processed, err := repo.BulkDelete([]int64{id1, id2})
+	if err != nil || processed != 2 {
+		t.Fatalf("bulk delete failed: processed %d, err: %v", processed, err)
+	}
+
+	var count int
+	_ = repo.db.QueryRow(`SELECT COUNT(*) FROM article_views`).Scan(&count)
+	if count != 0 {
+		t.Errorf("expected 0 orphaned views after bulk delete, got %d", count)
+	}
+}
