@@ -238,15 +238,15 @@ func (r *NewsRepository) AutoPublishCandidates(categories, minLabels []string, l
 		placeholders := make([]string, len(categories))
 		for i, c := range categories {
 			placeholders[i] = "?"
-			args = append(args, c)
+			args = append(args, strings.ToLower(strings.TrimSpace(c)))
 		}
-		where += " AND category IN (" + strings.Join(placeholders, ",") + ")"
+		where += " AND LOWER(category) IN (" + strings.Join(placeholders, ",") + ")"
 	}
 	if len(minLabels) > 0 {
 		placeholders := make([]string, len(minLabels))
 		for i, l := range minLabels {
 			placeholders[i] = "?"
-			args = append(args, l)
+			args = append(args, strings.ToLower(strings.TrimSpace(l)))
 		}
 		// value_label stores LOW/MEDIUM/HIGH (upper). Match case-insensitively.
 		where += " AND LOWER(value_label) IN (" + strings.Join(placeholders, ",") + ")"
@@ -334,20 +334,38 @@ func (r *NewsRepository) Update(id int64, n models.News) error {
 	return nil
 }
 
-// Delete removes an article.
+// Delete removes an article and its associated view counts.
 func (r *NewsRepository) Delete(id int64) error {
-	if _, err := r.db.Exec(`DELETE FROM news WHERE id = ?`, id); err != nil {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx delete news: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM article_views WHERE news_id = ?`, id); err != nil {
+		return fmt.Errorf("delete article views: %w", err)
+	}
+	if _, err := tx.Exec(`DELETE FROM news WHERE id = ?`, id); err != nil {
 		return fmt.Errorf("delete news: %w", err)
 	}
-	return nil
+	return tx.Commit()
 }
 
-// DeleteByStatus removes all articles matching a specific status (e.g. draft, published).
+// DeleteByStatus removes all articles matching a specific status and their associated view counts.
 func (r *NewsRepository) DeleteByStatus(status string) error {
-	if _, err := r.db.Exec(`DELETE FROM news WHERE status = ?`, status); err != nil {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin tx delete news by status: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM article_views WHERE news_id IN (SELECT id FROM news WHERE status = ?)`, status); err != nil {
+		return fmt.Errorf("delete article views by status: %w", err)
+	}
+	if _, err := tx.Exec(`DELETE FROM news WHERE status = ?`, status); err != nil {
 		return fmt.Errorf("delete news by status: %w", err)
 	}
-	return nil
+	return tx.Commit()
 }
 
 // BulkSetStatus updates the status for a list of article IDs in a single query.
@@ -390,7 +408,7 @@ func (r *NewsRepository) BulkSetStatus(ids []int64, status models.NewsStatus) (i
 	return res.RowsAffected()
 }
 
-// BulkDelete removes multiple articles by their IDs in a single query.
+// BulkDelete removes multiple articles by their IDs in a single transaction.
 func (r *NewsRepository) BulkDelete(ids []int64) (int64, error) {
 	if len(ids) == 0 {
 		return 0, nil
@@ -403,12 +421,29 @@ func (r *NewsRepository) BulkDelete(ids []int64) (int64, error) {
 	}
 	inClause := strings.Join(placeholders, ",")
 
+	tx, err := r.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("begin tx bulk delete: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(fmt.Sprintf(`DELETE FROM article_views WHERE news_id IN (%s)`, inClause), args...); err != nil {
+		return 0, fmt.Errorf("bulk delete article views: %w", err)
+	}
+
 	query := fmt.Sprintf(`DELETE FROM news WHERE id IN (%s)`, inClause)
-	res, err := r.db.Exec(query, args...)
+	res, err := tx.Exec(query, args...)
 	if err != nil {
 		return 0, fmt.Errorf("bulk delete news: %w", err)
 	}
-	return res.RowsAffected()
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("rows affected: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit bulk delete: %w", err)
+	}
+	return rows, nil
 }
 
 // viewCooldown bounds how often the same viewer can count as a new read for
@@ -754,8 +789,8 @@ func (r *NewsRepository) GetAnalytics(topLimit int) (*AnalyticsData, error) {
 		CategoryDistribution: make([]CategoryCount, 0),
 	}
 
-	// 1. Total Views
-	_ = r.db.QueryRow(`SELECT COUNT(*) FROM article_views`).Scan(&data.TotalViews)
+	// 1. Total Views (count views of existing articles only)
+	_ = r.db.QueryRow(`SELECT COUNT(*) FROM article_views av JOIN news n ON n.id = av.news_id`).Scan(&data.TotalViews)
 
 	// 2. Status counts
 	rows, err := r.db.Query(`SELECT status, COUNT(*) FROM news GROUP BY status`)
