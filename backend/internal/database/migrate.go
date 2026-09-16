@@ -3,6 +3,8 @@ package database
 import (
 	"database/sql"
 	"fmt"
+
+	"neuralwire/backend/internal/ai"
 )
 
 // schema defines every table used by Neuralwire.
@@ -148,6 +150,31 @@ func Migrate(db *sql.DB) error {
 	// 3. Create indexes after all tables and columns are guaranteed to exist
 	if _, err := db.Exec(indexes); err != nil {
 		return fmt.Errorf("create indexes: %w", err)
+	}
+
+	// 4. Backfill any existing news items with missing image_url using curated tech images.
+	rowsEmpty, err := db.Query(`SELECT id, title, category FROM news WHERE image_url = '' OR image_url IS NULL`)
+	if err == nil {
+		type emptyItem struct {
+			id       int64
+			title    string
+			category string
+		}
+		var items []emptyItem
+		for rowsEmpty.Next() {
+			var it emptyItem
+			if err := rowsEmpty.Scan(&it.id, &it.title, &it.category); err == nil {
+				items = append(items, it)
+			}
+		}
+		rowsEmpty.Close()
+
+		for _, it := range items {
+			img := ai.GetCuratedTechImage(it.category, it.title)
+			if img != "" {
+				_, _ = db.Exec(`UPDATE news SET image_url = ? WHERE id = ?`, img, it.id)
+			}
+		}
 	}
 
 	return nil
