@@ -147,8 +147,8 @@ The system uses a **curator model**: AI assists with summarization, categorizati
 
 #### 1. Clone the repository
 ```bash
-git clone git@github.com:stysus/Neuralwire.git
-cd Neuralwire
+git clone git@github.com:neuralwire-media/neuralwire.git
+cd neuralwire
 ```
 
 #### 2. Backend Setup
