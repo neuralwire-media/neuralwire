@@ -3,7 +3,6 @@
 	import type { PageData, Snapshot } from './$types';
 	import type { News } from '$lib/mockData';
 	import Image from '$lib/Image.svelte';
-	import BookmarkButton from '$lib/BookmarkButton.svelte';
 	import TrendingNews from '$lib/TrendingNews.svelte';
 	import { getSiteUrl } from '$lib/siteUrl';
 	import { getNewsPage } from '$lib/api';
@@ -340,13 +339,7 @@
 								</div>
 							</div>
 
-							<div class="flex items-center gap-3">
-								<BookmarkButton
-									article={featuredArticle}
-									size="md"
-									showText={true}
-									class="rounded-lg border border-white/10 bg-[#0F172A]/80 px-3.5 py-2 hover:border-[#22D3EE]/40 hover:bg-[#22D3EE]/5"
-								/>
+							<div>
 								<a
 									href="/{featuredArticle.slug}"
 									class="group inline-flex items-center justify-center space-x-2 rounded-lg border border-[#22D3EE]/20 bg-[#22D3EE]/5 px-4 py-2 font-mono text-xs text-[#22D3EE] transition-all duration-300 hover:border-[#22D3EE]/50 hover:bg-[#22D3EE]/10 hover:text-white"
