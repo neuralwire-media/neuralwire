@@ -5,6 +5,7 @@
 	import BookmarkButton from '$lib/BookmarkButton.svelte';
 	import { getSiteUrl } from '$lib/siteUrl';
 	import { getNewsPage } from '$lib/api';
+	import { getOgImageUrl } from '$lib/og';
 
 	let { data }: { data: PageData } = $props();
 
@@ -12,6 +13,13 @@
 	const initialArticles = $derived(data.news as News[]);
 	const totalItems = $derived(data.total ?? (data.news as News[]).length);
 	const initialTotalPages = $derived(data.totalPages ?? 1);
+
+	const categoryOgImage = $derived(
+		getOgImageUrl({
+			title: `${category.name} Editorial & Research Archive`,
+			category: category.name
+		})
+	);
 
 	let loadedArticles = $state<News[] | null>(null);
 	let currentPage = $state(1);
@@ -92,14 +100,16 @@
 	/>
 	<meta property="og:type" content="website" />
 	<meta property="og:url" content="{getSiteUrl()}/category/{category.slug}" />
-	<meta property="og:image" content="{getSiteUrl()}/favicon.svg" />
+	<meta property="og:image" content={categoryOgImage} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content="{category.name} | NeuralWire AI News" />
 	<meta
 		name="twitter:description"
 		content="Explore news and in-depth articles about {category.name} from the editors of NeuralWire."
 	/>
-	<meta name="twitter:image" content="{getSiteUrl()}/favicon.svg" />
+	<meta name="twitter:image" content={categoryOgImage} />
 </svelte:head>
 
 <section id="category-feed" class="mx-auto max-w-7xl flex-grow px-4 py-12 sm:px-6 md:py-16 lg:px-8">

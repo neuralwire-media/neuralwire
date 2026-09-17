@@ -189,25 +189,27 @@ func Migrate(db *sql.DB) error {
 		return fmt.Errorf("create indexes: %w", err)
 	}
 
-	// 4. Backfill any existing news items with missing image_url using curated tech images.
-	rowsEmpty, err := db.Query(`SELECT id, title, category FROM news WHERE image_url = '' OR image_url IS NULL`)
+	// 4. Backfill/upgrade any existing news items with missing or legacy stock Unsplash image_urls to dynamic OG generator URLs.
+	rowsEmpty, err := db.Query(`SELECT id, title, COALESCE(category, ''), COALESCE(source, ''), COALESCE(value_score, 0) FROM news WHERE image_url = '' OR image_url IS NULL OR image_url LIKE 'https://images.unsplash.com/%'`)
 	if err == nil {
 		type emptyItem struct {
-			id       int64
-			title    string
-			category string
+			id         int64
+			title      string
+			category   string
+			sourceName string
+			score      int
 		}
 		var items []emptyItem
 		for rowsEmpty.Next() {
 			var it emptyItem
-			if err := rowsEmpty.Scan(&it.id, &it.title, &it.category); err == nil {
+			if err := rowsEmpty.Scan(&it.id, &it.title, &it.category, &it.sourceName, &it.score); err == nil {
 				items = append(items, it)
 			}
 		}
 		rowsEmpty.Close()
 
 		for _, it := range items {
-			img := ai.GetCuratedTechImage(it.category, it.title)
+			img := ai.GetDynamicOGURL(it.category, it.title, it.sourceName, it.score)
 			if img != "" {
 				_, _ = db.Exec(`UPDATE news SET image_url = ? WHERE id = ?`, img, it.id)
 			}

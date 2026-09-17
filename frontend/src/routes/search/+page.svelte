@@ -5,8 +5,18 @@
 	import Image from '$lib/Image.svelte';
 	import BookmarkButton from '$lib/BookmarkButton.svelte';
 	import { getSiteUrl } from '$lib/siteUrl';
+	import { getOgImageUrl } from '$lib/og';
 
 	let { data }: { data: PageData } = $props();
+
+	const searchOgImage = $derived(
+		getOgImageUrl({
+			title: data.query
+				? `Search: "${data.query}" // Neuralwire Archives`
+				: 'Search AI News & Research Archives',
+			category: 'Search'
+		})
+	);
 
 	// Local query state synchronized from URL query
 	let inputQuery = $state('');
@@ -66,14 +76,16 @@
 	/>
 	<meta property="og:type" content="website" />
 	<meta property="og:url" content="{getSiteUrl()}/search" />
-	<meta property="og:image" content="{getSiteUrl()}/favicon.svg" />
+	<meta property="og:image" content={searchOgImage} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content="Search Archives | NeuralWire" />
 	<meta
 		name="twitter:description"
 		content="Search the NeuralWire archives for artificial intelligence news, documentation, and chronicles."
 	/>
-	<meta name="twitter:image" content="{getSiteUrl()}/favicon.svg" />
+	<meta name="twitter:image" content={searchOgImage} />
 </svelte:head>
 
 <section class="mx-auto max-w-7xl flex-grow px-4 py-12 sm:px-6 md:py-16 lg:px-8">

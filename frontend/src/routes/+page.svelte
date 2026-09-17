@@ -7,8 +7,16 @@
 	import TrendingNews from '$lib/TrendingNews.svelte';
 	import { getSiteUrl } from '$lib/siteUrl';
 	import { getNewsPage } from '$lib/api';
+	import { getOgImageUrl } from '$lib/og';
 
 	let { data }: { data: PageData } = $props();
+
+	const homeOgImage = $derived(
+		getOgImageUrl({
+			title: 'The AI, Neural Networks & Future of Compute Editorial Chronicle',
+			category: 'AI & Systems'
+		})
+	);
 
 	interface FeedState {
 		articles: News[];
@@ -184,13 +192,16 @@
 	/>
 	<meta property="og:type" content="website" />
 	<meta property="og:url" content="{getSiteUrl()}/" />
-	<meta property="og:image" content="{getSiteUrl()}/favicon.svg" />
+	<meta property="og:image" content={homeOgImage} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content="NeuralWire | AI News & Editorial" />
 	<meta
 		name="twitter:description"
 		content="An editorial news portal for artificial intelligence, neural networks, and the future of computation."
 	/>
-	<meta name="twitter:image" content="{getSiteUrl()}/favicon.svg" />
+	<meta name="twitter:image" content={homeOgImage} />
 </svelte:head>
 
 <!-- Hero Section -->

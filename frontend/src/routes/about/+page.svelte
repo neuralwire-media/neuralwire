@@ -1,5 +1,11 @@
 <script lang="ts">
 	import { getSiteUrl } from '$lib/siteUrl';
+	import { getOgImageUrl } from '$lib/og';
+
+	const aboutOgImage = getOgImageUrl({
+		title: 'About Neuralwire — Editorial Integrity, AI Discovery & Architecture',
+		category: 'Editorial'
+	});
 
 	const aboutJsonLdHtml =
 		'<scr' +
@@ -37,14 +43,16 @@
 	/>
 	<meta property="og:type" content="website" />
 	<meta property="og:url" content="{getSiteUrl()}/about" />
-	<meta property="og:image" content="{getSiteUrl()}/favicon.svg" />
+	<meta property="og:image" content={aboutOgImage} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content="About | NeuralWire AI News & Editorial Curation" />
 	<meta
 		name="twitter:description"
 		content="NeuralWire is an independent curation chronicle and AI-assisted digest platform indexing frontier artificial intelligence research, neural architectures, and computational breakthroughs."
 	/>
-	<meta name="twitter:image" content="{getSiteUrl()}/favicon.svg" />
+	<meta name="twitter:image" content={aboutOgImage} />
 
 	<!-- Structured Data (Schema.org AboutPage & Organization) -->
 	{@html aboutJsonLdHtml}

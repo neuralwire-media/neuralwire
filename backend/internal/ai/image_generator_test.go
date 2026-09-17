@@ -12,7 +12,7 @@ import (
 
 func TestImageGeneratorDisabledSkipsGeneration(t *testing.T) {
 	// Even with an API key + base URL, disabled generator must never call
-	// the upstream image endpoint and must return a stock Unsplash fallback.
+	// the upstream image endpoint and must return a dynamic OG fallback.
 	called := false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
@@ -25,8 +25,8 @@ func TestImageGeneratorDisabledSkipsGeneration(t *testing.T) {
 	if called {
 		t.Error("disabled image generator should not call upstream")
 	}
-	if got == "" || !strings.HasPrefix(got, "https://images.unsplash.com/") {
-		t.Errorf("expected curated Unsplash fallback URL, got %q", got)
+	if got == "" || !strings.HasPrefix(got, "https://og.neuralwire.info/api/og?") {
+		t.Errorf("expected dynamic OG fallback URL, got %q", got)
 	}
 }
 
@@ -77,18 +77,25 @@ func TestGetCuratedTechImageNeverPanics(t *testing.T) {
 	for _, cat := range categories {
 		for _, title := range titles {
 			url := GetCuratedTechImage(cat, title)
-			if url == "" || !strings.HasPrefix(url, "https://images.unsplash.com/") {
+			if url == "" || !strings.HasPrefix(url, "https://og.neuralwire.info/api/og?") {
 				t.Errorf("GetCuratedTechImage(%q, %q) returned invalid url: %q", cat, title, url)
 			}
 		}
 	}
 }
 
-func TestHashStringDeterministic(t *testing.T) {
-	title := "OpenAI Releases Next Generation Foundation Model"
-	h1 := hashString(title)
-	h2 := hashString(title)
-	if h1 != h2 {
-		t.Errorf("hashString is not deterministic: %d vs %d", h1, h2)
+func TestGetDynamicOGURLParams(t *testing.T) {
+	url := GetDynamicOGURL("Research", "DeepSeek V3 Model", "ArXiv", 92)
+	if !strings.Contains(url, "title=DeepSeek+V3+Model") {
+		t.Errorf("missing title param in url: %s", url)
+	}
+	if !strings.Contains(url, "category=Research") {
+		t.Errorf("missing category param in url: %s", url)
+	}
+	if !strings.Contains(url, "source=ArXiv") {
+		t.Errorf("missing source param in url: %s", url)
+	}
+	if !strings.Contains(url, "score=92") {
+		t.Errorf("missing score param in url: %s", url)
 	}
 }
