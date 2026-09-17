@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -24,8 +25,8 @@ func TestImageGeneratorDisabledSkipsGeneration(t *testing.T) {
 	if called {
 		t.Error("disabled image generator should not call upstream")
 	}
-	if got != "" {
-		t.Errorf("expected empty string fallback, got %q", got)
+	if got == "" || !strings.HasPrefix(got, "https://images.unsplash.com/") {
+		t.Errorf("expected curated Unsplash fallback URL, got %q", got)
 	}
 }
 
@@ -59,5 +60,35 @@ func TestImageGeneratorSuccessReturnsURL(t *testing.T) {
 	got := g.Generate(context.Background(), "Title", "ai")
 	if got != "https://img.example.com/cover.png" {
 		t.Errorf("Generate = %q, want generated image URL", got)
+	}
+}
+
+func TestGetCuratedTechImageNeverPanics(t *testing.T) {
+	categories := []string{"ai", "tools", "research", "machine-learning", "industry", "default", "unknown-cat", ""}
+	titles := []string{
+		"",
+		"A",
+		"Simple Title",
+		"Very long title with lots of characters and punctuation !@#$%^&*()_+-=[]{}|;':,.<>/?`~",
+		"Unicode: 🤖 神经网络 深度学习 Frontier Model",
+		strings.Repeat("overflow-test-string-pattern-", 100),
+	}
+
+	for _, cat := range categories {
+		for _, title := range titles {
+			url := GetCuratedTechImage(cat, title)
+			if url == "" || !strings.HasPrefix(url, "https://images.unsplash.com/") {
+				t.Errorf("GetCuratedTechImage(%q, %q) returned invalid url: %q", cat, title, url)
+			}
+		}
+	}
+}
+
+func TestHashStringDeterministic(t *testing.T) {
+	title := "OpenAI Releases Next Generation Foundation Model"
+	h1 := hashString(title)
+	h2 := hashString(title)
+	if h1 != h2 {
+		t.Errorf("hashString is not deterministic: %d vs %d", h1, h2)
 	}
 }

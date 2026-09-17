@@ -21,3 +21,8 @@ func SetMetrics(m *metrics.Metrics) {
 func recordAICall(failed bool) {
 	defaultMetrics.AICall(failed)
 }
+
+// recordAITokens reports token usage from an upstream AI request to the metrics collector.
+func recordAITokens(promptTokens, completionTokens, totalTokens int, model string) {
+	defaultMetrics.AITokens(promptTokens, completionTokens, totalTokens, model)
+}

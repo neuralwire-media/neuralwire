@@ -1,19 +1,19 @@
 name: Deploy to VPS
 
-# Automatically triggers when code is pushed or merged into main.
+# Automatically triggers when a version tag (v*.*.*) is pushed.
 # Also allows manual triggering from the GitHub Actions UI (workflow_dispatch).
 
 'on':
   push:
-    branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.gitignore'
-      - 'LICENSE'
-      - '.github/workflows/backend-ci.yml'
-      - '.github/workflows/frontend-ci.yml'
+    tags:
+      - 'v*.*.*'
+      - 'v*'
   workflow_dispatch:
+    inputs:
+      git_ref:
+        description: 'Git Ref / Branch / Tag to deploy (default: main)'
+        required: false
+        default: 'main'
 
 concurrency:
   group: deploy-vps
@@ -38,7 +38,15 @@ jobs:
             echo "==> Deploying Neuralwire on VPS..."
             cd /app/neuralwire
             git config --global --add safe.directory /app/neuralwire
-            git pull origin main
+            git fetch --all --tags
+
+            TARGET_REF="${{ github.event.inputs.git_ref || github.ref_name || 'main' }}"
+            echo "==> Target ref to deploy: $TARGET_REF"
+            git checkout "$TARGET_REF"
+            if git show-ref --verify --quiet "refs/heads/$TARGET_REF"; then
+              git pull origin "$TARGET_REF"
+            fi
+
             docker compose up -d --build
 
             echo "==> Verifying container health & uptime..."

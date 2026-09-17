@@ -3,6 +3,7 @@
 	import type { PageData } from './$types';
 	import type { News } from '$lib/mockData';
 	import Image from '$lib/Image.svelte';
+	import BookmarkButton from '$lib/BookmarkButton.svelte';
 	import TrendingNews from '$lib/TrendingNews.svelte';
 	import { getSiteUrl } from '$lib/siteUrl';
 	import { getNewsPage } from '$lib/api';
@@ -285,25 +286,33 @@
 								</div>
 							</div>
 
-							<a
-								href="/{featuredArticle.slug}"
-								class="group inline-flex items-center justify-center space-x-2 rounded-lg border border-[#22D3EE]/20 bg-[#22D3EE]/5 px-4 py-2 font-mono text-xs text-[#22D3EE] transition-all duration-300 hover:border-[#22D3EE]/50 hover:bg-[#22D3EE]/10 hover:text-white"
-							>
-								<span>READ FULL BRIEF</span>
-								<svg
-									class="h-3.5 w-3.5 transform transition-transform group-hover:translate-x-1"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke="currentColor"
+							<div class="flex items-center gap-3">
+								<BookmarkButton
+									article={featuredArticle}
+									size="md"
+									showText={true}
+									class="rounded-lg border border-white/10 bg-[#0F172A]/80 px-3.5 py-2 hover:border-[#22D3EE]/40 hover:bg-[#22D3EE]/5"
+								/>
+								<a
+									href="/{featuredArticle.slug}"
+									class="group inline-flex items-center justify-center space-x-2 rounded-lg border border-[#22D3EE]/20 bg-[#22D3EE]/5 px-4 py-2 font-mono text-xs text-[#22D3EE] transition-all duration-300 hover:border-[#22D3EE]/50 hover:bg-[#22D3EE]/10 hover:text-white"
 								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M14 5l7 7m0 0l-7 7m7-7H3"
-									/>
-								</svg>
-							</a>
+									<span>READ FULL BRIEF</span>
+									<svg
+										class="h-3.5 w-3.5 transform transition-transform group-hover:translate-x-1"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M14 5l7 7m0 0l-7 7m7-7H3"
+										/>
+									</svg>
+								</a>
+							</div>
 						</div>
 					</div>
 
@@ -474,8 +483,8 @@
 								{getCategoryName(post.category)}
 							</span>
 						</div>
-						{#if post.cluster_count && post.cluster_count > 0}
-							<div class="absolute top-2 right-2">
+						<div class="absolute top-2 right-2 flex items-center gap-1.5">
+							{#if post.cluster_count && post.cluster_count > 0}
 								<span
 									class="tag-mono inline-flex items-center gap-1 rounded border border-purple-500/40 bg-[#0A0E17]/90 px-2 py-0.5 text-[10px] font-bold text-purple-300 shadow-sm backdrop-blur-sm"
 									title="{post.cluster_count} sumber lain meliput berita ini"
@@ -495,8 +504,13 @@
 									</svg>
 									+{post.cluster_count} sumber
 								</span>
-							</div>
-						{/if}
+							{/if}
+							<BookmarkButton
+								article={post}
+								size="sm"
+								class="rounded border border-white/10 bg-[#0A0E17]/90 p-1 backdrop-blur-sm hover:border-[#22D3EE]/50 hover:bg-[#0A0E17]"
+							/>
+						</div>
 					</a>
 
 					<!-- Card Body -->

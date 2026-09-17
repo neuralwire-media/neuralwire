@@ -59,7 +59,7 @@ func (g *openAIImageGenerator) Generate(ctx context.Context, title, category str
 	// Skip AI generation when disabled by config or after the provider
 	// reported it does not support image generation.
 	if !g.enabled || g.unsupported {
-		return GetDynamicUnsplashURL(category, title)
+		return GetCuratedTechImage(category, title)
 	}
 
 	apiKey, baseURL, _ := resolveAIConfig(g.apiKey, "", g.imageEndpoint)
@@ -85,9 +85,8 @@ func (g *openAIImageGenerator) Generate(ctx context.Context, title, category str
 		}
 	}
 
-	// 2. Fallback to dynamic, unique Unsplash featured images based on title keywords and hash signature.
-	// This avoids backend rate-limiting, network latency, and ensures highly relevant, unique cover images.
-	return GetDynamicUnsplashURL(category, title)
+	// 2. Fallback to curated, high-resolution technology photo URL distributed stably by title hash.
+	return GetCuratedTechImage(category, title)
 }
 
 // extractKeywords extracts clean, meaningful keywords from the article title.
@@ -119,14 +118,11 @@ func GetDynamicUnsplashURL(category, title string) string {
 	return ""
 }
 
-// hashString computes a simple hash of a string for distribution.
-func hashString(s string) int {
-	h := 0
+// hashString computes a simple non-negative hash of a string for distribution.
+func hashString(s string) uint64 {
+	var h uint64
 	for i := 0; i < len(s); i++ {
-		h = 31*h + int(s[i])
-	}
-	if h < 0 {
-		h = -h
+		h = 31*h + uint64(s[i])
 	}
 	return h
 }
@@ -139,7 +135,7 @@ func GetCuratedTechImage(category, title string) string {
 		list = stockImages["default"]
 	}
 
-	idx := hashString(title) % len(list)
+	idx := int(hashString(title) % uint64(len(list)))
 	return list[idx]
 }
 

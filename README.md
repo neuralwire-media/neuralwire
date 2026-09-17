@@ -147,8 +147,8 @@ The system uses a **curator model**: AI assists with summarization, categorizati
 
 #### 1. Clone the repository
 ```bash
-git clone git@github.com:stysus/Neuralwire.git
-cd Neuralwire
+git clone git@github.com:neuralwire-media/neuralwire.git
+cd neuralwire
 ```
 
 #### 2. Backend Setup
@@ -286,7 +286,7 @@ The repository includes automated GitHub Actions workflows in `.github/workflows
   - Runs `npm ci`, Prettier + ESLint checks, `svelte-check` typecheck, static production build, and `npm audit --audit-level=high`.
 - **`deploy.yml`**:
   - Serialized concurrency group `deploy-vps` (`cancel-in-progress: false`).
-  - Triggers on merge to `main` → SSHs into production VPS → pulls changes and builds container with Docker Compose.
+  - Triggers on semantic version tag push (`v*.*.*`) or manual dispatch (`workflow_dispatch`) → SSHs into production VPS → checks out target ref and builds container with Docker Compose.
   - **Automated Post-Deploy Health Check**: Executes a 30-second polling retry loop (5s interval) validating container state (`docker compose ps`) and `http://127.0.0.1:8080/api/healthz`. Dumps 100 lines of container logs and exits with code 1 if health check fails.
 
 ---

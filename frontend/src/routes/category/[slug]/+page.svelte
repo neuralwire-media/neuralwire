@@ -2,6 +2,7 @@
 	import type { PageData } from './$types';
 	import type { News } from '$lib/mockData';
 	import Image from '$lib/Image.svelte';
+	import BookmarkButton from '$lib/BookmarkButton.svelte';
 	import { getSiteUrl } from '$lib/siteUrl';
 	import { getNewsPage } from '$lib/api';
 
@@ -130,8 +131,8 @@
 							alt={post.title}
 							class="h-full w-full object-cover opacity-75 transition-all duration-550 group-hover:scale-105 group-hover:opacity-100"
 						/>
-						{#if post.cluster_count && post.cluster_count > 0}
-							<div class="absolute top-2 right-2">
+						<div class="absolute top-2 right-2 flex items-center gap-1.5">
+							{#if post.cluster_count && post.cluster_count > 0}
 								<span
 									class="tag-mono inline-flex items-center gap-1 rounded border border-purple-500/40 bg-[#0A0E17]/90 px-2 py-0.5 text-[10px] font-bold text-purple-300 shadow-sm backdrop-blur-sm"
 									title="{post.cluster_count} sumber lain meliput berita ini"
@@ -151,8 +152,13 @@
 									</svg>
 									+{post.cluster_count} sumber
 								</span>
-							</div>
-						{/if}
+							{/if}
+							<BookmarkButton
+								article={post}
+								size="sm"
+								class="rounded border border-white/10 bg-[#0A0E17]/90 p-1 backdrop-blur-sm hover:border-[#22D3EE]/50 hover:bg-[#0A0E17]"
+							/>
+						</div>
 					</a>
 
 					<!-- Card Body -->

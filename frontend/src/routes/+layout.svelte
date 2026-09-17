@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { getSiteUrl } from '$lib/siteUrl';
+	import { bookmarks } from '$lib/bookmarks.svelte';
 
 	let { children, data } = $props();
 
@@ -136,13 +137,13 @@
 			</nav>
 
 			<!-- Search and Actions -->
-			<div class="hidden items-center space-x-4 md:flex">
+			<div class="hidden items-center space-x-3 md:flex">
 				<form onsubmit={handleSearch} class="relative">
 					<input
 						type="text"
 						placeholder="Search archives..."
 						bind:value={searchQuery}
-						class="w-48 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#0F172A] px-3 py-1.5 pl-8 font-mono text-xs text-slate-200 placeholder-slate-500 transition-all focus:border-[#22D3EE]/50 focus:ring-1 focus:ring-[#22D3EE]/30 focus:outline-none"
+						class="w-44 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#0F172A] px-3 py-1.5 pl-8 font-mono text-xs text-slate-200 placeholder-slate-500 transition-all focus:border-[#22D3EE]/50 focus:ring-1 focus:ring-[#22D3EE]/30 focus:outline-none"
 					/>
 					<svg
 						class="absolute top-2.5 left-2.5 h-3.5 w-3.5 text-slate-500"
@@ -158,10 +159,62 @@
 						/>
 					</svg>
 				</form>
+
+				<!-- Bookmarks Header Link -->
+				<a
+					href="/bookmarks"
+					class="relative flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#0F172A] text-slate-400 transition-all hover:border-[#22D3EE]/40 hover:bg-[#22D3EE]/5 hover:text-[#22D3EE] {$page
+						.url.pathname === '/bookmarks'
+						? 'border-[#22D3EE]/50 text-[#22D3EE]'
+						: ''}"
+					aria-label="Saved Transmissions"
+					title="Saved Transmissions ({bookmarks.count})"
+				>
+					<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+						/>
+					</svg>
+					{#if bookmarks.count > 0}
+						<span
+							class="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#22D3EE] px-1 font-mono text-[9px] font-bold text-[#0A0E17] shadow-[0_0_8px_rgba(34,211,238,0.8)]"
+						>
+							{bookmarks.count > 99 ? '99+' : bookmarks.count}
+						</span>
+					{/if}
+				</a>
 			</div>
 
 			<!-- Mobile Menu Button -->
 			<div class="flex items-center space-x-2 md:hidden">
+				<a
+					href="/bookmarks"
+					class="relative flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:text-white {$page
+						.url.pathname === '/bookmarks'
+						? 'text-[#22D3EE]'
+						: ''}"
+					aria-label="Saved Transmissions"
+				>
+					<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+						/>
+					</svg>
+					{#if bookmarks.count > 0}
+						<span
+							class="absolute top-0 right-0 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-[#22D3EE] px-0.5 font-mono text-[8px] font-bold text-[#0A0E17]"
+						>
+							{bookmarks.count > 9 ? '9+' : bookmarks.count}
+						</span>
+					{/if}
+				</a>
+
 				<button
 					onclick={toggleMobileMenu}
 					class="rounded-md p-2 text-slate-400 hover:bg-slate-800/30 hover:text-white focus:outline-none"
@@ -225,6 +278,23 @@
 						: 'text-slate-400 hover:text-white'}"
 				>
 					FEED
+				</a>
+				<a
+					href="/bookmarks"
+					onclick={() => (isMobileMenuOpen = false)}
+					class="flex items-center justify-between rounded-md px-3 py-2 font-mono text-sm tracking-wider uppercase {$page
+						.url.pathname === '/bookmarks'
+						? 'bg-[#22D3EE]/5 text-[#22D3EE]'
+						: 'text-slate-400 hover:text-white'}"
+				>
+					<span>SAVED ARCHIVES</span>
+					{#if bookmarks.count > 0}
+						<span
+							class="rounded bg-[#22D3EE]/20 px-1.5 py-0.5 font-mono text-xs font-bold text-[#22D3EE]"
+						>
+							{bookmarks.count}
+						</span>
+					{/if}
 				</a>
 				{#each data.categories || [] as cat}
 					<a
@@ -293,9 +363,34 @@
 						>
 					</li>
 					<li>
+						<a href="/bookmarks" class="text-slate-400 transition-colors hover:text-white"
+							>SAVED ARCHIVES</a
+						>
+					</li>
+					<li>
 						<a href="/about" class="text-slate-400 transition-colors hover:text-white"
 							>ABOUT EDITORIAL</a
 						>
+					</li>
+					<li>
+						<a
+							href="/rss.xml"
+							target="_blank"
+							rel="noopener noreferrer"
+							class="flex items-center gap-1.5 text-slate-400 transition-colors hover:text-[#22D3EE]"
+						>
+							<svg
+								class="h-3.5 w-3.5 text-[#22D3EE]"
+								viewBox="0 0 24 24"
+								fill="currentColor"
+								aria-hidden="true"
+							>
+								<path
+									d="M6.18 15.64a2.18 2.18 0 0 1 2.18 2.18C8.36 19 7.38 20 6.18 20C5 20 4 19 4 17.82a2.18 2.18 0 0 1 2.18-2.18M4 4.44A15.56 15.56 0 0 1 19.56 20h-2.83A12.73 12.73 0 0 0 4 7.27V4.44m0 5.66a9.9 9.9 0 0 1 9.9 9.9h-2.83A7.07 7.07 0 0 0 4 12.93V10.1Z"
+								/>
+							</svg>
+							RSS FEED
+						</a>
 					</li>
 					<li>
 						<a href="/copyright" class="text-slate-400 transition-colors hover:text-white"

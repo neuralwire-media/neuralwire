@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { page as pageStore } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import Image from '$lib/Image.svelte';
@@ -55,10 +54,7 @@
 		}
 	}
 
-	onMount(() => {
-		fetchRejected(currentPage);
-	});
-
+	// Trigger fetch on initial mount and query param page change
 	$effect(() => {
 		fetchRejected(currentPage);
 	});

@@ -104,7 +104,7 @@ Before proposing a commit or Pull Request, the agent/developer MUST execute live
    4. Obtain explicit user confirmation before committing.
    5. `git push origin <type>/<kebab-case-name>`
    6. Open Pull Request with target `base: main` using the appropriate PR template.
-   7. Confirm all GitHub Actions CI checks pass with 100% green status.
+   7. Present the Pull Request URL and summary directly to the user and immediately end the task. Do NOT monitor or poll CI.
 
 ### 3.2 Permissions & Scope Lock Invariants
 1. **Explicit Permission Required**:
@@ -119,10 +119,10 @@ Before proposing a commit or Pull Request, the agent/developer MUST execute live
 2. **Interactive GPG / Passphrase Block Procedure**:
    - If a `git commit` process pauses, hangs, or fails due to GPG signing (e.g. pinentry passphrase requirement in a non-interactive shell), the agent MUST **immediately stop the commit process and ask the user directly**.
 
-### 3.4 Clean CI Monitoring & Chat Output Invariant (STRICT)
-1. **Strict Prohibition on Long-Polling / Watch Commands**:
-   - **NEVER** execute long-polling or watch commands (e.g. `gh pr checks --watch`, `gh run watch`, or interactive polling loops) that get sent to the background and cause the CLI runtime to inject `<SYSTEM_MESSAGE>` logs into the user chat.
-   - **NEVER** set redundant background timer schedules (`schedule`) solely to monitor GitHub Actions.
-2. **Synchronous Direct Verification Standard**:
-   - Check PR and workflow status via single direct queries (e.g. `gh pr checks <PR_NUMBER>` or `gh run view <RUN_ID>`) with adequate synchronous wait timeouts (`WaitMsBeforeAsync`).
-   - Present clean, human-readable PR summaries and status links directly to the user without leaving noisy background tasks running.
+### 3.4 No CI Monitoring / Polling After PR Creation Invariant (STRICT)
+1. **Zero CI Monitoring / Polling After PR**:
+   - **STRICT PROHIBITION**: Once a Pull Request is created, the agent MUST **NEVER** monitor, poll, watch, or sleep-wait for GitHub Actions CI checks (`gh pr checks`, `gh run watch`, background tasks, timer schedules, etc.).
+   - Immediately hand over the PR URL and change summary to the user and complete the turn.
+2. **Clean Chat & Zero Background Clutter**:
+   - Do NOT launch background polling tasks or timers that cause the CLI runtime to inject `<SYSTEM_MESSAGE>` notifications into the chat.
+   - CI verification and merging will be handled directly by the user on the GitHub UI.

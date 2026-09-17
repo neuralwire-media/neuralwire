@@ -1428,6 +1428,83 @@ func TestSitemapAndRobots(t *testing.T) {
 	}
 }
 
+func TestRSSFeed(t *testing.T) {
+	s := newTestServer(t)
+	token := adminToken(t, s)
+
+	// Publish one article with special characters, image, and category
+	createBody := map[string]any{
+		"title":     "LLM & Neural Net <Breakthrough> \"v2.0\" 'Special'",
+		"url":       "https://example.com/rss-test",
+		"category":  "ai",
+		"summary":   "A detailed summary of AI & ML advances.",
+		"image_url": "/uploads/test-image.png",
+	}
+	rec := doJSONAs(t, s, http.MethodPost, "/api/admin/news", createBody, token)
+	var created struct {
+		ID   int64  `json:"id"`
+		Slug string `json:"slug"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &created)
+	_ = doJSONAs(t, s, http.MethodPost, "/api/admin/news/"+strconv.FormatInt(created.ID, 10)+"/publish", nil, token)
+
+	// Also create a draft article that should NOT appear in RSS feed
+	draftBody := map[string]any{
+		"title":    "Draft Story Not Published",
+		"url":      "https://example.com/draft-test",
+		"category": "ai",
+	}
+	_ = doJSONAs(t, s, http.MethodPost, "/api/admin/news", draftBody, token)
+
+	for _, path := range []string{"/rss.xml", "/feed.xml"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec = httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, want %d", path, rec.Code, http.StatusOK)
+		}
+		contentType := rec.Header().Get("Content-Type")
+		if !strings.Contains(contentType, "application/rss+xml") {
+			t.Errorf("%s Content-Type = %s, want application/rss+xml", path, contentType)
+		}
+		cacheControl := rec.Header().Get("Cache-Control")
+		if !strings.Contains(cacheControl, "max-age=1800") {
+			t.Errorf("%s Cache-Control = %s, want max-age=1800", path, cacheControl)
+		}
+
+		body := rec.Body.String()
+		if !strings.HasPrefix(body, `<?xml version="1.0" encoding="UTF-8"?>`) {
+			t.Errorf("%s missing XML declaration", path)
+		}
+		if !strings.Contains(body, `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">`) {
+			t.Errorf("%s missing rss version 2.0 with atom namespace", path)
+		}
+		origin := "https://" + req.Host
+		if !strings.Contains(body, `<atom:link href="`+origin+`/rss.xml" rel="self" type="application/rss+xml" />`) {
+			t.Errorf("%s missing atom:link self reference", path)
+		}
+		// Check that special characters are XML-escaped
+		if !strings.Contains(body, "LLM &amp; Neural Net &lt;Breakthrough&gt; &quot;v2.0&quot; &apos;Special&apos;") {
+			t.Errorf("%s title not properly XML escaped", path)
+		}
+		if !strings.Contains(body, "A detailed summary of AI &amp; ML advances.") {
+			t.Errorf("%s summary not properly XML escaped", path)
+		}
+		if !strings.Contains(body, "<category>ai</category>") {
+			t.Errorf("%s missing category tag", path)
+		}
+		if !strings.Contains(body, `enclosure url="`+origin+`/uploads/test-image.png" type="image/png"`) {
+			t.Errorf("%s missing or invalid enclosure tag for image", path)
+		}
+		if !strings.Contains(body, "/"+created.Slug) {
+			t.Errorf("%s missing published article slug /%s", path, created.Slug)
+		}
+		if strings.Contains(body, "Draft Story Not Published") {
+			t.Errorf("%s contains draft story, only published articles should be included", path)
+		}
+	}
+}
+
 func TestStaticFallbackRouting(t *testing.T) {
 	tmpDir := t.TempDir()
 	indexHTML := `<!doctype html><html><head><title>Neuralwire</title></head><body>App</body></html>`
@@ -1747,6 +1824,12 @@ func TestAdminAnalytics(t *testing.T) {
 	}
 	if resp.System.MemoryAllocMB <= 0 {
 		t.Errorf("memory_alloc_mb = %f, want > 0", resp.System.MemoryAllocMB)
+	}
+	if resp.System.HTTPRequestsTotal <= 0 {
+		t.Errorf("http_requests_total = %d, want > 0", resp.System.HTTPRequestsTotal)
+	}
+	if resp.System.HTTPStatusCodes == nil {
+		t.Errorf("http_status_codes map is nil")
 	}
 }
 

@@ -21,6 +21,7 @@ import (
 
 	"github.com/mmcdole/gofeed"
 
+	"neuralwire/backend/internal/ai"
 	"neuralwire/backend/internal/backup"
 	"neuralwire/backend/internal/models"
 	"neuralwire/backend/internal/netutil"
@@ -135,6 +136,81 @@ func (s *Server) handleSitemap(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
+	_, _ = w.Write([]byte(b.String()))
+}
+
+// handleRSS renders an RSS 2.0 XML feed of the latest published articles.
+// It serves up to 50 latest published articles, formatted with standard RSS 2.0
+// fields (title, link, guid, description, enclosure, pubDate, category) for
+// feed readers (Feedly, Apple News, NetNewsWire), Google News discovery, and SEO.
+func (s *Server) handleRSS(w http.ResponseWriter, r *http.Request) {
+	origin := s.sitemapOrigin(r)
+
+	// Fetch up to 50 latest published articles.
+	articles, _, err := s.newsRepo.ListPublished("", "", 1, 50)
+	if err != nil {
+		s.slog.Error("api: rss news", "error", err)
+		s.writeError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
+	b.WriteString(`<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">` + "\n")
+	b.WriteString("  <channel>\n")
+	b.WriteString("    <title>NeuralWire — AI News, Neural Networks &amp; Future Computation</title>\n")
+	b.WriteString("    <link>" + xmlEscape(origin) + "</link>\n")
+	b.WriteString("    <description>Curated intelligence on frontier AI research, neural networks, machine learning, and computational industry.</description>\n")
+	b.WriteString("    <language>en-us</language>\n")
+
+	buildDate := time.Now().UTC().Format(time.RFC1123Z)
+	if len(articles) > 0 && articles[0].PublishedAt != nil {
+		buildDate = articles[0].PublishedAt.UTC().Format(time.RFC1123Z)
+	}
+	b.WriteString("    <lastBuildDate>" + buildDate + "</lastBuildDate>\n")
+	b.WriteString(`    <atom:link href="` + xmlEscape(origin+"/rss.xml") + `" rel="self" type="application/rss+xml" />` + "\n")
+
+	for _, a := range articles {
+		b.WriteString("    <item>\n")
+		b.WriteString("      <title>" + xmlEscape(a.Title) + "</title>\n")
+		articleLink := origin + "/" + a.Slug
+		b.WriteString("      <link>" + xmlEscape(articleLink) + "</link>\n")
+		b.WriteString(`      <guid isPermaLink="true">` + xmlEscape(articleLink) + "</guid>\n")
+		if a.Summary != "" {
+			b.WriteString("      <description>" + xmlEscape(a.Summary) + "</description>\n")
+		} else if a.Content != "" {
+			b.WriteString("      <description>" + xmlEscape(a.Content) + "</description>\n")
+		}
+		if a.Category != "" {
+			b.WriteString("      <category>" + xmlEscape(a.Category) + "</category>\n")
+		}
+		if a.PublishedAt != nil {
+			b.WriteString("      <pubDate>" + a.PublishedAt.UTC().Format(time.RFC1123Z) + "</pubDate>\n")
+		}
+		if a.ImageURL != "" {
+			imgURL := a.ImageURL
+			if strings.HasPrefix(imgURL, "/") {
+				imgURL = origin + imgURL
+			}
+			mimeType := "image/jpeg"
+			lowerImg := strings.ToLower(imgURL)
+			if strings.HasSuffix(lowerImg, ".png") {
+				mimeType = "image/png"
+			} else if strings.HasSuffix(lowerImg, ".webp") {
+				mimeType = "image/webp"
+			} else if strings.HasSuffix(lowerImg, ".gif") {
+				mimeType = "image/gif"
+			}
+			b.WriteString(`      <enclosure url="` + xmlEscape(imgURL) + `" type="` + mimeType + `" length="0" />` + "\n")
+		}
+		b.WriteString("    </item>\n")
+	}
+
+	b.WriteString("  </channel>\n")
+	b.WriteString("</rss>\n")
+
+	w.Header().Set("Content-Type", "application/rss+xml; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=1800")
 	_, _ = w.Write([]byte(b.String()))
 }
 
@@ -873,6 +949,11 @@ func (s *Server) handleCreateNews(w http.ResponseWriter, r *http.Request) {
 		s.logger.Printf("api: ensure category %q: %v", req.Category, err)
 	}
 
+	imageURL := req.ImageURL
+	if imageURL == "" {
+		imageURL = ai.GetCuratedTechImage(req.Category, req.Title)
+	}
+
 	article := models.News{
 		Title:    req.Title,
 		URL:      req.URL,
@@ -880,7 +961,7 @@ func (s *Server) handleCreateNews(w http.ResponseWriter, r *http.Request) {
 		Category: req.Category,
 		Summary:  req.Summary,
 		Content:  req.Content,
-		ImageURL: req.ImageURL,
+		ImageURL: imageURL,
 		Status:   models.StatusDraft,
 	}
 
@@ -1163,20 +1244,29 @@ type adminAnalyticsResponse struct {
 		RejectedCount        int64                        `json:"rejected_count"`
 		CategoryDistribution []repository.CategoryCount   `json:"category_distribution"`
 		ScoreDistribution    repository.ScoreDistribution `json:"score_distribution"`
+		Funnel               repository.PipelineFunnel    `json:"funnel"`
 	} `json:"content"`
 	System struct {
-		UptimeSeconds     int64   `json:"uptime_seconds"`
-		HTTPRequestsTotal int64   `json:"http_requests_total"`
-		HTTPErrorsTotal   int64   `json:"http_errors_total"`
-		HTTPAvgLatencyMs  float64 `json:"http_avg_latency_ms"`
-		FetchCyclesTotal  int64   `json:"fetch_cycles_total"`
-		FetchCyclesFailed int64   `json:"fetch_cycles_failed"`
-		AICallsTotal      int64   `json:"ai_calls_total"`
-		AICallsFailed     int64   `json:"ai_calls_failed"`
-		MemoryAllocMB     float64 `json:"memory_alloc_mb"`
-		MemorySysMB       float64 `json:"memory_sys_mb"`
-		NumGoroutines     int     `json:"num_goroutines"`
+		UptimeSeconds      int64            `json:"uptime_seconds"`
+		HTTPRequestsTotal  int64            `json:"http_requests_total"`
+		HTTPErrorsTotal    int64            `json:"http_errors_total"`
+		HTTP4xxTotal       int64            `json:"http_4xx_total"`
+		HTTP5xxTotal       int64            `json:"http_5xx_total"`
+		HTTPStatusCodes    map[string]int64 `json:"http_status_codes"`
+		HTTPAvgLatencyMs   float64          `json:"http_avg_latency_ms"`
+		FetchCyclesTotal   int64            `json:"fetch_cycles_total"`
+		FetchCyclesFailed  int64            `json:"fetch_cycles_failed"`
+		AICallsTotal       int64            `json:"ai_calls_total"`
+		AICallsFailed      int64            `json:"ai_calls_failed"`
+		AIPromptTokens     int64            `json:"ai_prompt_tokens"`
+		AICompletionTokens int64            `json:"ai_completion_tokens"`
+		AITotalTokens      int64            `json:"ai_total_tokens"`
+		AITokensByModel    map[string]int64 `json:"ai_tokens_by_model"`
+		MemoryAllocMB      float64          `json:"memory_alloc_mb"`
+		MemorySysMB        float64          `json:"memory_sys_mb"`
+		NumGoroutines      int              `json:"num_goroutines"`
 	} `json:"system"`
+	Sources []models.RSSSource `json:"sources,omitempty"`
 }
 
 func (s *Server) handleAdminAnalytics(w http.ResponseWriter, r *http.Request) {
@@ -1201,18 +1291,32 @@ func (s *Server) handleAdminAnalytics(w http.ResponseWriter, r *http.Request) {
 	resp.Content.RejectedCount = data.RejectedCount
 	resp.Content.CategoryDistribution = data.CategoryDistribution
 	resp.Content.ScoreDistribution = data.ScoreDistribution
+	resp.Content.Funnel = data.Funnel
 
 	resp.System.UptimeSeconds = int64(time.Since(s.startTime).Seconds())
 	resp.System.HTTPRequestsTotal = snap.HTTPRequestsTotal
 	resp.System.HTTPErrorsTotal = snap.HTTPErrorsTotal
+	resp.System.HTTP4xxTotal = snap.HTTP4xxTotal
+	resp.System.HTTP5xxTotal = snap.HTTP5xxTotal
+	resp.System.HTTPStatusCodes = snap.HTTPStatusCodes
 	resp.System.HTTPAvgLatencyMs = math.Round(snap.HTTPAvgLatencyMs*100) / 100
 	resp.System.FetchCyclesTotal = snap.FetchCyclesTotal
 	resp.System.FetchCyclesFailed = snap.FetchCyclesFailed
 	resp.System.AICallsTotal = snap.AICallsTotal
 	resp.System.AICallsFailed = snap.AICallsFailed
+	resp.System.AIPromptTokens = snap.AIPromptTokens
+	resp.System.AICompletionTokens = snap.AICompletionTokens
+	resp.System.AITotalTokens = snap.AITotalTokens
+	resp.System.AITokensByModel = snap.AITokensByModel
 	resp.System.MemoryAllocMB = math.Round(float64(m.Alloc)/1024/1024*100) / 100
 	resp.System.MemorySysMB = math.Round(float64(m.Sys)/1024/1024*100) / 100
 	resp.System.NumGoroutines = runtime.NumGoroutine()
+
+	if s.sourceRepo != nil {
+		if srcs, err := s.sourceRepo.ListAll(); err == nil {
+			resp.Sources = srcs
+		}
+	}
 
 	s.writeJSON(w, http.StatusOK, resp)
 }

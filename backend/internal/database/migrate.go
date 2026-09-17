@@ -3,6 +3,8 @@ package database
 import (
 	"database/sql"
 	"fmt"
+
+	"neuralwire/backend/internal/ai"
 )
 
 // schema defines every table used by Neuralwire.
@@ -110,6 +112,15 @@ var scoringColumns = []struct{ name, decl string }{
 	{"is_primary", "INTEGER NOT NULL DEFAULT 1"},
 }
 
+// sourceColumns are added to the rss_sources table for diagnostic health metrics.
+var sourceColumns = []struct{ name, decl string }{
+	{"last_duration_ms", "INTEGER NOT NULL DEFAULT 0"},
+	{"last_http_status", "INTEGER NOT NULL DEFAULT 0"},
+	{"last_error", "TEXT NOT NULL DEFAULT ''"},
+	{"consecutive_failures", "INTEGER NOT NULL DEFAULT 0"},
+	{"total_items_yielded", "INTEGER NOT NULL DEFAULT 0"},
+}
+
 // Migrate applies the schema, additive migrations, and indexes. It is idempotent.
 func Migrate(db *sql.DB) error {
 	// 1. Create base tables
@@ -118,10 +129,10 @@ func Migrate(db *sql.DB) error {
 	}
 
 	// 2. Add additive columns for existing older schemas
-	existing := map[string]bool{}
+	existingNews := map[string]bool{}
 	rows, err := db.Query(`PRAGMA table_info(news)`)
 	if err != nil {
-		return fmt.Errorf("pragma table_info: %w", err)
+		return fmt.Errorf("pragma table_info(news): %w", err)
 	}
 	for rows.Next() {
 		var cid int
@@ -130,24 +141,77 @@ func Migrate(db *sql.DB) error {
 		var dflt any
 		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
 			rows.Close()
-			return fmt.Errorf("pragma scan: %w", err)
+			return fmt.Errorf("pragma scan news: %w", err)
 		}
-		existing[name] = true
+		existingNews[name] = true
 	}
 	rows.Close()
 
 	for _, col := range scoringColumns {
-		if existing[col.name] {
+		if existingNews[col.name] {
 			continue
 		}
 		if _, err := db.Exec(fmt.Sprintf(`ALTER TABLE news ADD COLUMN %s %s`, col.name, col.decl)); err != nil {
-			return fmt.Errorf("add column %s: %w", col.name, err)
+			return fmt.Errorf("add column %s to news: %w", col.name, err)
+		}
+	}
+
+	// Add additive columns to rss_sources
+	existingSources := map[string]bool{}
+	srows, err := db.Query(`PRAGMA table_info(rss_sources)`)
+	if err != nil {
+		return fmt.Errorf("pragma table_info(rss_sources): %w", err)
+	}
+	for srows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt any
+		if err := srows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			srows.Close()
+			return fmt.Errorf("pragma scan rss_sources: %w", err)
+		}
+		existingSources[name] = true
+	}
+	srows.Close()
+
+	for _, col := range sourceColumns {
+		if existingSources[col.name] {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf(`ALTER TABLE rss_sources ADD COLUMN %s %s`, col.name, col.decl)); err != nil {
+			return fmt.Errorf("add column %s to rss_sources: %w", col.name, err)
 		}
 	}
 
 	// 3. Create indexes after all tables and columns are guaranteed to exist
 	if _, err := db.Exec(indexes); err != nil {
 		return fmt.Errorf("create indexes: %w", err)
+	}
+
+	// 4. Backfill any existing news items with missing image_url using curated tech images.
+	rowsEmpty, err := db.Query(`SELECT id, title, category FROM news WHERE image_url = '' OR image_url IS NULL`)
+	if err == nil {
+		type emptyItem struct {
+			id       int64
+			title    string
+			category string
+		}
+		var items []emptyItem
+		for rowsEmpty.Next() {
+			var it emptyItem
+			if err := rowsEmpty.Scan(&it.id, &it.title, &it.category); err == nil {
+				items = append(items, it)
+			}
+		}
+		rowsEmpty.Close()
+
+		for _, it := range items {
+			img := ai.GetCuratedTechImage(it.category, it.title)
+			if img != "" {
+				_, _ = db.Exec(`UPDATE news SET image_url = ? WHERE id = ?`, img, it.id)
+			}
+		}
 	}
 
 	return nil

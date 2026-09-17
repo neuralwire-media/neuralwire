@@ -236,6 +236,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/metrics", s.handleMetrics)
 	mux.HandleFunc("GET /sitemap.xml", s.handleSitemap)
 	mux.HandleFunc("GET /robots.txt", s.handleRobotsTXT)
+	mux.HandleFunc("GET /rss.xml", s.handleRSS)
+	mux.HandleFunc("GET /feed.xml", s.handleRSS)
 	mux.HandleFunc("GET /api/news", s.handleListNews)
 	mux.HandleFunc("GET /api/news/{id}", s.handleGetNews)
 	mux.HandleFunc("GET /api/news/trending", s.handleTrendingNews)
@@ -446,7 +448,7 @@ func (s *Server) serveIndexHTML(w http.ResponseWriter, r *http.Request) {
 			if err == nil && len(articles) > 0 && articles[0].ImageURL != "" {
 				preloadImage = articles[0].ImageURL
 			}
-		} else if !strings.HasPrefix(cleanPath, "category/") && cleanPath != "about" && cleanPath != "copyright" && cleanPath != "search" {
+		} else if !strings.HasPrefix(cleanPath, "category/") && !strings.HasPrefix(cleanPath, "admin") && cleanPath != "about" && cleanPath != "copyright" && cleanPath != "search" && cleanPath != "bookmarks" {
 			// Single article page: preload that article's cover image and inject article SEO tags
 			article, err := s.newsRepo.GetBySlug(cleanPath)
 			if err == nil && article != nil {

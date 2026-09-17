@@ -144,11 +144,16 @@ type Category struct {
 
 // RSSSource is a configured RSS/Atom feed to poll.
 type RSSSource struct {
-	ID            int64      `json:"id"`
-	Name          string     `json:"name"`
-	URL           string     `json:"url"`
-	Category      string     `json:"category"`
-	Enabled       bool       `json:"enabled"`
-	LastFetchedAt *time.Time `json:"last_fetched_at"`
-	CreatedAt     time.Time  `json:"created_at"`
+	ID                  int64      `json:"id"`
+	Name                string     `json:"name"`
+	URL                 string     `json:"url"`
+	Category            string     `json:"category"`
+	Enabled             bool       `json:"enabled"`
+	LastFetchedAt       *time.Time `json:"last_fetched_at"`
+	LastDurationMs      int64      `json:"last_duration_ms"`
+	LastHTTPStatus      int        `json:"last_http_status"`
+	LastError           string     `json:"last_error"`
+	ConsecutiveFailures int        `json:"consecutive_failures"`
+	TotalItemsYielded   int        `json:"total_items_yielded"`
+	CreatedAt           time.Time  `json:"created_at"`
 }

@@ -62,9 +62,25 @@ var defaultSettings = map[string]string{
 	"score_high_min":   "80",
 }
 
-// Seed inserts default categories and RSS sources when their tables are
-// empty. It is idempotent and safe to run on every boot.
+// Seed inserts default categories, RSS sources, and scoring settings on first
+// boot. If initial seeding has already been performed, Seed is a no-op so that
+// admin-deleted sources and categories are never resurrected on server restart.
 func Seed(db *sql.DB) error {
+	var val string
+	err := db.QueryRow(`SELECT value FROM app_settings WHERE key = 'initial_seed_done'`).Scan(&val)
+	if err == nil && val == "1" {
+		return nil
+	}
+
+	// For existing databases where initial_seed_done was not yet recorded,
+	// check if app_settings already has default score thresholds. If so, mark
+	// initial_seed_done and skip re-seeding to preserve deleted sources.
+	var settingsCount int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM app_settings WHERE key LIKE 'score_%'`).Scan(&settingsCount); err == nil && settingsCount > 0 {
+		_, _ = db.Exec(`INSERT OR IGNORE INTO app_settings (key, value) VALUES ('initial_seed_done', '1')`)
+		return nil
+	}
+
 	for _, c := range defaultCategories {
 		if _, err := db.Exec(
 			`INSERT OR IGNORE INTO categories (name, slug) VALUES (?, ?)`,
@@ -91,5 +107,7 @@ func Seed(db *sql.DB) error {
 			return err
 		}
 	}
-	return nil
+
+	_, err = db.Exec(`INSERT OR REPLACE INTO app_settings (key, value) VALUES ('initial_seed_done', '1')`)
+	return err
 }

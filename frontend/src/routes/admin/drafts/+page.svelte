@@ -236,11 +236,10 @@
 	}
 
 	onMount(() => {
-		fetchDrafts(currentPage);
 		loadLastFetch();
 	});
 
-	// Trigger fetch on query param page change
+	// Trigger fetch on initial mount and query param page change
 	$effect(() => {
 		fetchDrafts(currentPage);
 	});
