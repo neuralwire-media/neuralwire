@@ -203,7 +203,7 @@ export interface TrendingResponse {
 export async function getTrendingNews(
 	customFetch?: typeof fetch,
 	window: string = 'week',
-	limit: number = 5
+	limit: number = 10
 ): Promise<TrendingArticle[]> {
 	const f = getFetch(customFetch);
 	const url = `${BASE_URL}/news/trending?window=${encodeURIComponent(window)}&limit=${limit}`;

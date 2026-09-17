@@ -60,6 +60,8 @@
 	);
 
 	const visibleFeed = $derived(currentFeed.articles);
+	const topFeed = $derived(visibleFeed.slice(0, 6));
+	const streamFeed = $derived(visibleFeed.slice(6));
 	const hasMore = $derived(currentFeed.page < currentFeed.totalPages);
 	const canCollapse = $derived(currentFeed.articles.length > 15 || currentFeed.page > 1);
 
@@ -422,11 +424,108 @@
 	</section>
 {/if}
 
-<TrendingNews initialArticles={data.trending} />
+{#snippet newsCard(post: News)}
+	<article
+		class="group glow-hover flex flex-col overflow-hidden rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#0F172A]/25"
+	>
+		<!-- Thumbnail -->
+		<a
+			href="/{post.slug}"
+			class="relative block aspect-[16/10] w-full overflow-hidden border-b border-[rgba(255,255,255,0.08)] bg-[#0A0E17]"
+		>
+			<Image
+				src={post.image_url}
+				content={post.content}
+				alt={post.title}
+				class="h-full w-full object-cover opacity-75 transition-all duration-550 group-hover:scale-105 group-hover:opacity-100"
+			/>
+			<div class="absolute bottom-2 left-2">
+				<span
+					class="tag-mono rounded border border-[#22D3EE]/30 bg-[#0A0E17]/90 px-2 py-0.5 text-[10px] font-bold text-[#22D3EE] backdrop-blur-sm"
+				>
+					{getCategoryName(post.category)}
+				</span>
+			</div>
+			<div class="absolute top-2 right-2 flex items-center gap-1.5">
+				{#if post.cluster_count && post.cluster_count > 0}
+					<span
+						class="tag-mono inline-flex items-center gap-1 rounded border border-purple-500/40 bg-[#0A0E17]/90 px-2 py-0.5 text-[10px] font-bold text-purple-300 shadow-sm backdrop-blur-sm"
+						title="{post.cluster_count} sumber lain meliput berita ini"
+					>
+						<svg
+							class="h-3 w-3 text-purple-400"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+							/>
+						</svg>
+						+{post.cluster_count} sumber
+					</span>
+				{/if}
+				<BookmarkButton
+					article={post}
+					size="sm"
+					class="rounded border border-white/10 bg-[#0A0E17]/90 p-1 backdrop-blur-sm hover:border-[#22D3EE]/50 hover:bg-[#0A0E17]"
+				/>
+			</div>
+		</a>
+
+		<!-- Card Body -->
+		<div class="flex flex-grow flex-col space-y-3 p-5">
+			<!-- Meta -->
+			<div class="flex items-center space-x-2 font-mono text-[10px] text-slate-500">
+				<span>{formatDate(post.published_at)}</span>
+				<span>•</span>
+				<span>{getReadingTime(post.summary)}</span>
+			</div>
+
+			<!-- Title -->
+			<h4
+				class="flex-grow font-serif text-lg leading-snug font-normal text-white transition-colors group-hover:text-[#22D3EE]"
+			>
+				<a href="/{post.slug}" class="line-clamp-2">
+					{post.title}
+				</a>
+			</h4>
+
+			<!-- Summary -->
+			<p class="line-clamp-3 font-sans text-xs leading-relaxed font-light text-slate-400">
+				{post.summary}
+			</p>
+
+			<!-- Footer/Source -->
+			<div
+				class="flex items-center justify-between border-t border-[rgba(255,255,255,0.05)] pt-4 font-mono text-[10px] text-slate-500"
+			>
+				<span class="text-slate-400">{post.source.toUpperCase()}</span>
+				<a
+					href="/{post.slug}"
+					class="flex items-center space-x-1 text-[#22D3EE]/70 group-hover:text-[#22D3EE]"
+				>
+					<span>READ</span>
+					<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M9 5l7 7-7 7"
+						/>
+					</svg>
+				</a>
+			</div>
+		</div>
+	</article>
+{/snippet}
 
 <!-- News Feed Section -->
 <section id="chronicle-feed" class="mx-auto max-w-7xl px-4 py-12 sm:px-6 md:py-16 lg:px-8">
-	<!-- Feed Title & Categories Filter -->
+	<!-- Feed Title & Categories Filter (Full Width Header) -->
 	<div
 		class="mb-8 flex flex-col justify-between gap-4 border-b border-[rgba(255,255,255,0.08)] pb-6 md:flex-row md:items-end"
 	>
@@ -454,124 +553,82 @@
 		</div>
 	</div>
 
-	<!-- News Grid -->
-	{#if isCategoryLoading}
-		<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8 2xl:grid-cols-5">
-			{#each [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as i (i)}
-				<div
-					data-index={i}
-					class="flex animate-pulse flex-col overflow-hidden rounded-xl border border-[rgba(255,255,255,0.06)] bg-[#0F172A]/25 p-4"
-				>
-					<div class="mb-4 aspect-[16/10] w-full rounded-lg bg-slate-800/40"></div>
-					<div class="mb-3 h-3 w-20 rounded bg-slate-800/60"></div>
-					<div class="mb-2 h-5 w-5/6 rounded bg-slate-800/70"></div>
-					<div class="mb-2 h-4 w-full rounded bg-slate-800/40"></div>
-					<div class="h-4 w-2/3 rounded bg-slate-800/40"></div>
-				</div>
-			{/each}
-		</div>
-	{:else if visibleFeed.length > 0}
-		<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8 2xl:grid-cols-5">
-			{#each visibleFeed as post (post.id)}
-				<article
-					class="group glow-hover flex flex-col overflow-hidden rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#0F172A]/25"
-				>
-					<!-- Thumbnail -->
-					<a
-						href="/{post.slug}"
-						class="relative block aspect-[16/10] w-full overflow-hidden border-b border-[rgba(255,255,255,0.08)] bg-[#0A0E17]"
-					>
-						<Image
-							src={post.image_url}
-							content={post.content}
-							alt={post.title}
-							class="h-full w-full object-cover opacity-75 transition-all duration-550 group-hover:scale-105 group-hover:opacity-100"
-						/>
-						<div class="absolute bottom-2 left-2">
-							<span
-								class="tag-mono rounded border border-[#22D3EE]/30 bg-[#0A0E17]/90 px-2 py-0.5 text-[10px] font-bold text-[#22D3EE] backdrop-blur-sm"
-							>
-								{getCategoryName(post.category)}
-							</span>
-						</div>
-						<div class="absolute top-2 right-2 flex items-center gap-1.5">
-							{#if post.cluster_count && post.cluster_count > 0}
-								<span
-									class="tag-mono inline-flex items-center gap-1 rounded border border-purple-500/40 bg-[#0A0E17]/90 px-2 py-0.5 text-[10px] font-bold text-purple-300 shadow-sm backdrop-blur-sm"
-									title="{post.cluster_count} sumber lain meliput berita ini"
-								>
-									<svg
-										class="h-3 w-3 text-purple-400"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke="currentColor"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-										/>
-									</svg>
-									+{post.cluster_count} sumber
-								</span>
-							{/if}
-							<BookmarkButton
-								article={post}
-								size="sm"
-								class="rounded border border-white/10 bg-[#0A0E17]/90 p-1 backdrop-blur-sm hover:border-[#22D3EE]/50 hover:bg-[#0A0E17]"
-							/>
-						</div>
-					</a>
+	<!-- Top Section: 2 Columns on Desktop (Feed Top 6 Articles 75% + Trending Sidebar 25%) -->
+	<div class="grid grid-cols-1 items-stretch gap-8 lg:grid-cols-12 lg:gap-10">
+		<!-- Trending Signal: Mobile Strip (< lg) & Desktop Sidebar (>= lg) -->
+		<aside class="order-1 flex flex-col lg:order-2 lg:col-span-3">
+			<TrendingNews initialArticles={data.trending} />
+		</aside>
 
-					<!-- Card Body -->
-					<div class="flex flex-grow flex-col space-y-3 p-5">
-						<!-- Meta -->
-						<div class="flex items-center space-x-2 font-mono text-[10px] text-slate-500">
-							<span>{formatDate(post.published_at)}</span>
-							<span>•</span>
-							<span>{getReadingTime(post.summary)}</span>
-						</div>
-
-						<!-- Title -->
-						<h4
-							class="flex-grow font-serif text-lg leading-snug font-normal text-white transition-colors group-hover:text-[#22D3EE]"
-						>
-							<a href="/{post.slug}" class="line-clamp-2">
-								{post.title}
-							</a>
-						</h4>
-
-						<!-- Summary -->
-						<p class="line-clamp-3 font-sans text-xs leading-relaxed font-light text-slate-400">
-							{post.summary}
-						</p>
-
-						<!-- Footer/Source -->
+		<!-- Top 6 Articles (2 Rows of 3 Cards on lg+) -->
+		<div class="order-2 lg:order-1 lg:col-span-9">
+			{#if isCategoryLoading}
+				<div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+					{#each [0, 1, 2, 3, 4, 5] as i (i)}
 						<div
-							class="flex items-center justify-between border-t border-[rgba(255,255,255,0.05)] pt-4 font-mono text-[10px] text-slate-500"
+							data-index={i}
+							class="flex animate-pulse flex-col overflow-hidden rounded-xl border border-[rgba(255,255,255,0.06)] bg-[#0F172A]/25 p-4"
 						>
-							<span class="text-slate-400">{post.source.toUpperCase()}</span>
-							<a
-								href="/{post.slug}"
-								class="flex items-center space-x-1 text-[#22D3EE]/70 group-hover:text-[#22D3EE]"
-							>
-								<span>READ</span>
-								<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M9 5l7 7-7 7"
-									/>
-								</svg>
-							</a>
+							<div class="mb-4 aspect-[16/10] w-full rounded-lg bg-slate-800/40"></div>
+							<div class="mb-3 h-3 w-20 rounded bg-slate-800/60"></div>
+							<div class="mb-2 h-5 w-5/6 rounded bg-slate-800/70"></div>
+							<div class="mb-2 h-4 w-full rounded bg-slate-800/40"></div>
+							<div class="h-4 w-2/3 rounded bg-slate-800/40"></div>
 						</div>
+					{/each}
+				</div>
+			{:else if topFeed.length > 0}
+				<div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+					{#each topFeed as post (post.id)}
+						{@render newsCard(post)}
+					{/each}
+				</div>
+			{:else}
+				<!-- Empty State -->
+				<div
+					class="rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0F172A]/25 px-4 py-24 text-center"
+				>
+					<div
+						class="mx-auto mb-4 flex h-16 w-16 animate-pulse items-center justify-center rounded-full border border-dashed border-[#22D3EE]/30 bg-[#22D3EE]/5"
+					>
+						<svg
+							class="h-6 w-6 text-[#22D3EE]"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
+							/>
+						</svg>
 					</div>
-				</article>
-			{/each}
+					<p class="mb-2 font-mono text-sm tracking-wider text-[#22D3EE] uppercase">
+						No Transmissions Found
+					</p>
+					<p class="mx-auto max-w-sm text-xs text-slate-500">
+						There are no reports currently registered under the selected matrix category.
+					</p>
+				</div>
+			{/if}
 		</div>
+	</div>
 
+	<!-- Bottom Section: Full Width Extended Grid (Article 7 onwards, up to 5 cols on 2xl) -->
+	{#if !isCategoryLoading && streamFeed.length > 0}
+		<div class="mt-8 border-t border-[rgba(255,255,255,0.06)] pt-8">
+			<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8 2xl:grid-cols-5">
+				{#each streamFeed as post (post.id)}
+					{@render newsCard(post)}
+				{/each}
+			</div>
+		</div>
+	{/if}
+
+	<!-- Pagination / Load More Controls (Full Width) -->
+	{#if !isCategoryLoading && visibleFeed.length > 0}
 		{#if hasMore}
 			<div class="mt-12 flex flex-wrap items-center justify-center gap-4">
 				<button
@@ -657,30 +714,6 @@
 				<span>COLLAPSE FEED</span>
 			</button>
 		{/if}
-	{:else}
-		<!-- Empty State -->
-		<div
-			class="rounded-2xl border border-[rgba(255,255,255,0.08)] bg-[#0F172A]/25 px-4 py-24 text-center"
-		>
-			<div
-				class="mx-auto mb-4 flex h-16 w-16 animate-pulse items-center justify-center rounded-full border border-dashed border-[#22D3EE]/30 bg-[#22D3EE]/5"
-			>
-				<svg class="h-6 w-6 text-[#22D3EE]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
-					/>
-				</svg>
-			</div>
-			<p class="mb-2 font-mono text-sm tracking-wider text-[#22D3EE] uppercase">
-				No Transmissions Found
-			</p>
-			<p class="mx-auto max-w-sm text-xs text-slate-500">
-				There are no reports currently registered under the selected matrix category.
-			</p>
-		</div>
 	{/if}
 </section>
 
