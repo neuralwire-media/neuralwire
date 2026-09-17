@@ -67,9 +67,20 @@ Before proposing a commit or Pull Request, the agent/developer MUST execute live
 
 ---
 
-## 2. Architecture & Project Conventions
+## 2. Project Identity & Domain Invariants (MANDATORY)
 
-### 2.1 Backend (Go)
+### 2.1 Canonical Identity & Production Domain
+- **Official Production Domain**: `neuralwire.info` (Canonical base URL: `https://neuralwire.info`).
+- **Official Organization**: `neuralwire-media` (`https://github.com/neuralwire-media/neuralwire`).
+- **Strict Domain Invariant**:
+  - NEVER hallucinate, guess, or substitute alternative domains (e.g. `.org`, `.com`, `.net`, `.io`, `.dev`).
+  - ALL canonical links, SEO meta tags, email references (`neuralwiremedia@gmail.com`), health check URLs (`https://neuralwire.info/api/health`), and status references MUST strictly use `neuralwire.info`.
+
+---
+
+## 3. Architecture & Project Conventions
+
+### 3.1 Backend (Go)
 - **Framework**: Standard library `net/http` with Go 1.22+ routing patterns (`GET /api/...`, `POST /api/...`).
 - **Database**: SQLite with `database/sql` and custom migrations in `backend/internal/database/migrate.go`.
 - **Security Invariants**:
@@ -77,16 +88,16 @@ Before proposing a commit or Pull Request, the agent/developer MUST execute live
   - Wrap JSON/multipart request bodies with `http.MaxBytesReader` to prevent memory DoS.
   - Enforce standard security headers (COOP, CORP, HSTS, X-Content-Type-Options, etc.) in `api/security.go`.
 
-### 2.2 Frontend (SvelteKit)
+### 3.2 Frontend (SvelteKit)
 - **Framework**: SvelteKit with Svelte 5 runes (`$state`, `$derived`, `$effect`, `$props`).
 - **Styling**: TailwindCSS with cyber/editorial dark theme.
 - **Build Adapter**: `@sveltejs/adapter-static` for static frontend SPA generation.
 
 ---
 
-## 3. Developer & Git Guardrails
+## 4. Developer & Git Guardrails
 
-### 3.1 Feature Branching Strategy (MANDATORY)
+### 4.1 Feature Branching Strategy (MANDATORY)
 1. **Base & Target Branch**:
    - `main` is the single source of truth for stable production code.
    - All tasks (features, bug fixes, refactors, docs, security fixes, CI) MUST branch off the latest `main`.
@@ -106,20 +117,20 @@ Before proposing a commit or Pull Request, the agent/developer MUST execute live
    6. Open Pull Request with target `base: main` using the appropriate PR template.
    7. Present the Pull Request URL and summary directly to the user and immediately end the task. Do NOT monitor or poll CI.
 
-### 3.2 Permissions & Scope Lock Invariants
+### 4.2 Permissions & Scope Lock Invariants
 1. **Explicit Permission Required**:
    - NEVER execute `git commit`, `git push`, or create a Pull Request without explicit confirmation from the user.
 2. **Scope Lock Invariant**:
    - Limit code modifications strictly to the task requested. Avoid speculative refactoring or style churn outside the feature scope.
 
-### 3.3 Mandatory GPG-Signed Commits Invariant (STRICT)
+### 4.3 Mandatory GPG-Signed Commits Invariant (STRICT)
 1. **Zero Unsigned Commits**:
    - ALL commits in this repository MUST be cryptographically signed with GPG (`commit.gpgsign=true`).
    - **STRICT PROHIBITION**: NEVER bypass, suppress, or disable GPG signing using `--no-gpg-sign` under any circumstances.
 2. **Interactive GPG / Passphrase Block Procedure**:
    - If a `git commit` process pauses, hangs, or fails due to GPG signing (e.g. pinentry passphrase requirement in a non-interactive shell), the agent MUST **immediately stop the commit process and ask the user directly**.
 
-### 3.4 No CI Monitoring / Polling After PR Creation Invariant (STRICT)
+### 4.4 No CI Monitoring / Polling After PR Creation Invariant (STRICT)
 1. **Zero CI Monitoring / Polling After PR**:
    - **STRICT PROHIBITION**: Once a Pull Request is created, the agent MUST **NEVER** monitor, poll, watch, or sleep-wait for GitHub Actions CI checks (`gh pr checks`, `gh run watch`, background tasks, timer schedules, etc.).
    - Immediately hand over the PR URL and change summary to the user and complete the turn.
