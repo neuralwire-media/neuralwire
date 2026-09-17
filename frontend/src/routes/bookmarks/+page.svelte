@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { bookmarks } from '$lib/bookmarks.svelte';
 	import Image from '$lib/Image.svelte';
-	import BookmarkButton from '$lib/BookmarkButton.svelte';
 
 	let searchQuery = $state('');
 
@@ -42,11 +41,8 @@
 </script>
 
 <svelte:head>
-	<title>Saved Transmissions | NeuralWire Intelligence</title>
-	<meta
-		name="description"
-		content="Personal offline intelligence dossier and saved NeuralWire transmissions."
-	/>
+	<title>Saved Archives | NeuralWire</title>
+	<meta name="description" content="Personal offline intelligence and saved NeuralWire archives." />
 	<meta name="robots" content="noindex, follow" />
 </svelte:head>
 
@@ -61,11 +57,7 @@
 					<span
 						class="rounded border border-[#22D3EE]/30 bg-[#22D3EE]/10 px-2 py-0.5 font-mono text-[10px] font-bold tracking-widest text-[#22D3EE] uppercase"
 					>
-						LOCAL DOSSIER
-					</span>
-					<span class="font-mono text-xs text-slate-500">
-						{bookmarks.count}
-						{bookmarks.count === 1 ? 'TRANSMISSION' : 'TRANSMISSIONS'} STORED
+						BOOKMARKS
 					</span>
 				</div>
 				<h1 class="font-serif text-3xl font-medium text-white md:text-4xl">SAVED ARCHIVES</h1>
@@ -125,7 +117,7 @@
 						/>
 					</svg>
 				</div>
-				<h2 class="mb-2 font-serif text-2xl font-normal text-white">NO SAVED TRANSMISSIONS</h2>
+				<h2 class="mb-2 font-serif text-2xl font-normal text-white">NO SAVED ARCHIVES</h2>
 				<p class="max-w-md font-sans text-sm font-light text-slate-400">
 					Your personal offline dossier is currently empty. Click the bookmark icon on any article
 					card or story to store it for quick reference.
@@ -139,7 +131,7 @@
 			</div>
 		{:else if filteredItems.length === 0}
 			<div class="py-16 text-center text-slate-400">
-				<p class="font-mono text-sm">NO SAVED TRANSMISSIONS MATCHING "{searchQuery}"</p>
+				<p class="font-mono text-sm">NO SAVED ARCHIVES MATCHING "{searchQuery}"</p>
 			</div>
 		{:else}
 			<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8 2xl:grid-cols-4">
@@ -164,13 +156,6 @@
 								>
 									{post.category?.toUpperCase() || 'AI'}
 								</span>
-							</div>
-							<div class="absolute top-2 right-2">
-								<BookmarkButton
-									article={post}
-									size="md"
-									class="rounded-lg border border-white/10 bg-[#0A0E17]/90 p-1.5 backdrop-blur-sm hover:border-[#22D3EE]/50"
-								/>
 							</div>
 						</a>
 

@@ -129,15 +129,6 @@
 		);
 	}
 
-	function shareOnReddit() {
-		openShare(
-			'https://www.reddit.com/submit?url=' +
-				encodeURIComponent(shareUrl) +
-				'&title=' +
-				encodeURIComponent(article.title)
-		);
-	}
-
 	// Feedback Form State
 	let opinion = $state('');
 	let email = $state('');
@@ -350,7 +341,7 @@
 						d="M10 19l-7-7m0 0l7-7m-7 7h18"
 					/>
 				</svg>
-				<span>RETURN TO CHRONICLE FEED</span>
+				<span>BACK</span>
 			</a>
 		</div>
 
@@ -364,6 +355,10 @@
 			</a>
 			<span class="font-mono text-slate-600">•</span>
 			<span class="font-mono text-slate-400">{formatDate(article.published_at)}</span>
+			<span class="font-mono text-slate-600">•</span>
+			<span class="font-mono text-slate-400"
+				>{getReadingTime(article.summary || article.content)}</span
+			>
 			<span class="font-mono text-slate-600">•</span>
 			<span class="font-mono font-bold text-[#22D3EE]">AI DIGEST SUMMARY</span>
 		</div>
@@ -390,121 +385,6 @@
 				class="absolute bottom-4 left-4 rounded-lg border border-[rgba(255,255,255,0.05)] bg-[#0A0E17]/80 px-3 py-1.5 font-mono text-[10px] text-slate-400 backdrop-blur-sm"
 			>
 				SOURCE: {article.source.toUpperCase()}
-			</div>
-		</div>
-		<!-- Sticky Action & Quick Share Bar -->
-		<div
-			class="sticky top-20 z-20 mb-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#070A10]/95 px-4 py-2.5 shadow-2xl backdrop-blur-md"
-		>
-			<div class="flex items-center gap-3">
-				<BookmarkButton
-					{article}
-					size="md"
-					showText={true}
-					class="rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#0F172A] px-3 py-1.5 hover:border-[#22D3EE]/40 hover:bg-[#22D3EE]/5"
-				/>
-				<span class="h-4 w-[1px] bg-white/10"></span>
-				<span class="font-mono text-xs text-slate-400">
-					{getReadingTime(article.summary || article.content)}
-				</span>
-			</div>
-
-			<!-- Quick Share Buttons -->
-			<div class="flex items-center gap-1.5">
-				<button
-					type="button"
-					onclick={copyLink}
-					class="relative flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#0F172A] px-2.5 font-mono text-xs text-slate-300 transition-all hover:border-[#22D3EE]/40 hover:bg-[#22D3EE]/5 hover:text-[#22D3EE]"
-					title="Copy link to clipboard"
-				>
-					{#if copied}
-						<svg
-							class="h-3.5 w-3.5 text-[#22D3EE]"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M5 13l4 4L19 7"
-							/>
-						</svg>
-						<span class="text-[11px] font-bold text-[#22D3EE]">COPIED</span>
-					{:else}
-						<svg
-							class="h-3.5 w-3.5 text-slate-400"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-							/>
-						</svg>
-						<span class="hidden sm:inline">COPY</span>
-					{/if}
-				</button>
-
-				<button
-					type="button"
-					onclick={shareOnX}
-					class="flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#0F172A] text-slate-400 transition-all hover:border-[#22D3EE]/40 hover:bg-[#22D3EE]/5 hover:text-[#22D3EE]"
-					title="Share on X"
-					aria-label="Share on X"
-				>
-					<svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
-						<path
-							d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
-						/>
-					</svg>
-				</button>
-
-				<button
-					type="button"
-					onclick={shareOnLinkedIn}
-					class="flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#0F172A] text-slate-400 transition-all hover:border-[#22D3EE]/40 hover:bg-[#22D3EE]/5 hover:text-[#22D3EE]"
-					title="Share on LinkedIn"
-					aria-label="Share on LinkedIn"
-				>
-					<svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
-						<path
-							d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.27a1.62 1.62 0 1 0 0 3.24 1.62 1.62 0 0 0 0-3.24z"
-						/>
-					</svg>
-				</button>
-
-				<button
-					type="button"
-					onclick={shareOnWhatsApp}
-					class="flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#0F172A] text-slate-400 transition-all hover:border-[#22D3EE]/40 hover:bg-[#22D3EE]/5 hover:text-[#22D3EE]"
-					title="Share on WhatsApp"
-					aria-label="Share on WhatsApp"
-				>
-					<svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
-						<path
-							d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2m.01 1.67c2.2 0 4.26.86 5.82 2.42a8.225 8.225 0 0 1 2.41 5.83c0 4.54-3.7 8.24-8.24 8.24-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.196 8.196 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24M8.53 7.33c-.16 0-.35.06-.53.27-.18.2-.69.67-.69 1.64s.71 1.9 1.01 2.11c.1.1 1.37 2.1 3.33 2.94.46.2.83.33 1.11.42.47.15.9.13 1.23.08.38-.06 1.15-.47 1.31-.92.16-.46.16-.85.11-.93-.05-.08-.18-.13-.38-.23s-1.15-.57-1.33-.63c-.18-.06-.31-.1-.44.1-.13.2-.5.63-.61.76-.11.13-.23.15-.43.05s-.85-.31-1.62-.99c-.6-.54-1-1.2-1.12-1.4-.11-.2-.01-.31.09-.41.09-.09.2-.23.3-.35.1-.11.13-.2.2-.33.06-.13.03-.25-.01-.35s-.44-1.07-.61-1.47c-.16-.38-.33-.33-.45-.33"
-						/>
-					</svg>
-				</button>
-
-				<button
-					type="button"
-					onclick={shareOnTelegram}
-					class="flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#0F172A] text-slate-400 transition-all hover:border-[#22D3EE]/40 hover:bg-[#22D3EE]/5 hover:text-[#22D3EE]"
-					title="Share on Telegram"
-					aria-label="Share on Telegram"
-				>
-					<svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
-						<path
-							d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 0 0-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"
-						/>
-					</svg>
-				</button>
 			</div>
 		</div>
 
@@ -643,36 +523,124 @@
 				</a>
 			</div>
 		</div>
-		<!-- Share & Source telemetry footer -->
+		<!-- Action & Quick Share Bar -->
 		<div
-			class="mb-16 flex flex-col items-center justify-between gap-4 border-y border-[rgba(255,255,255,0.08)] py-6 font-mono text-xs text-slate-500 sm:flex-row"
+			class="mb-16 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#070A10]/95 px-4 py-2.5 shadow-2xl backdrop-blur-md"
 		>
-			<div>
-				<span>Origin: {article.source}</span>
+			<div class="flex items-center gap-2 font-mono text-xs text-slate-400">
+				<span>Origin:</span>
+				<a
+					href={article.url}
+					target="_blank"
+					rel="noopener noreferrer"
+					class="font-medium text-slate-200 transition-colors hover:text-[#22D3EE] hover:underline"
+				>
+					{article.source}
+				</a>
 			</div>
 
-			<div class="flex items-center space-x-4">
-				<span class="text-slate-400">Share:</span>
+			<!-- Quick Share Buttons -->
+			<div class="flex items-center gap-1.5">
+				<button
+					type="button"
+					onclick={copyLink}
+					class="relative flex h-8 items-center gap-1.5 rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#0F172A] px-2.5 font-mono text-xs text-slate-300 transition-all hover:border-[#22D3EE]/40 hover:bg-[#22D3EE]/5 hover:text-[#22D3EE]"
+					title="Copy link to clipboard"
+				>
+					{#if copied}
+						<svg
+							class="h-3.5 w-3.5 text-[#22D3EE]"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M5 13l4 4L19 7"
+							/>
+						</svg>
+						<span class="text-[11px] font-bold text-[#22D3EE]">COPIED</span>
+					{:else}
+						<svg
+							class="h-3.5 w-3.5 text-slate-400"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+							/>
+						</svg>
+						<span class="hidden sm:inline">COPY</span>
+					{/if}
+				</button>
+
+				<BookmarkButton
+					{article}
+					size="sm"
+					showText={false}
+					class="flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#0F172A] text-slate-400 transition-all hover:border-[#22D3EE]/40 hover:bg-[#22D3EE]/5 hover:text-[#22D3EE]"
+				/>
+
 				<button
 					type="button"
 					onclick={shareOnX}
-					class="cursor-pointer transition-colors hover:text-[#22D3EE]"
+					class="flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#0F172A] text-slate-400 transition-all hover:border-[#22D3EE]/40 hover:bg-[#22D3EE]/5 hover:text-[#22D3EE]"
+					title="Share on X"
+					aria-label="Share on X"
 				>
-					X
+					<svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
+						<path
+							d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+						/>
+					</svg>
 				</button>
+
 				<button
 					type="button"
 					onclick={shareOnLinkedIn}
-					class="cursor-pointer transition-colors hover:text-[#22D3EE]"
+					class="flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#0F172A] text-slate-400 transition-all hover:border-[#22D3EE]/40 hover:bg-[#22D3EE]/5 hover:text-[#22D3EE]"
+					title="Share on LinkedIn"
+					aria-label="Share on LinkedIn"
 				>
-					LinkedIn
+					<svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
+						<path
+							d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.27a1.62 1.62 0 1 0 0 3.24 1.62 1.62 0 0 0 0-3.24z"
+						/>
+					</svg>
 				</button>
+
 				<button
 					type="button"
-					onclick={shareOnReddit}
-					class="cursor-pointer transition-colors hover:text-[#22D3EE]"
+					onclick={shareOnWhatsApp}
+					class="flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#0F172A] text-slate-400 transition-all hover:border-[#22D3EE]/40 hover:bg-[#22D3EE]/5 hover:text-[#22D3EE]"
+					title="Share on WhatsApp"
+					aria-label="Share on WhatsApp"
 				>
-					Reddit
+					<svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
+						<path
+							d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2m.01 1.67c2.2 0 4.26.86 5.82 2.42a8.225 8.225 0 0 1 2.41 5.83c0 4.54-3.7 8.24-8.24 8.24-1.48 0-2.93-.4-4.2-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.196 8.196 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24M8.53 7.33c-.16 0-.35.06-.53.27-.18.2-.69.67-.69 1.64s.71 1.9 1.01 2.11c.1.1 1.37 2.1 3.33 2.94.46.2.83.33 1.11.42.47.15.9.13 1.23.08.38-.06 1.15-.47 1.31-.92.16-.46.16-.85.11-.93-.05-.08-.18-.13-.38-.23s-1.15-.57-1.33-.63c-.18-.06-.31-.1-.44.1-.13.2-.5.63-.61.76-.11.13-.23.15-.43.05s-.85-.31-1.62-.99c-.6-.54-1-1.2-1.12-1.4-.11-.2-.01-.31.09-.41.09-.09.2-.23.3-.35.1-.11.13-.2.2-.33.06-.13.03-.25-.01-.35s-.44-1.07-.61-1.47c-.16-.38-.33-.33-.45-.33"
+						/>
+					</svg>
+				</button>
+
+				<button
+					type="button"
+					onclick={shareOnTelegram}
+					class="flex h-8 w-8 items-center justify-center rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#0F172A] text-slate-400 transition-all hover:border-[#22D3EE]/40 hover:bg-[#22D3EE]/5 hover:text-[#22D3EE]"
+					title="Share on Telegram"
+					aria-label="Share on Telegram"
+				>
+					<svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
+						<path
+							d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 0 0-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"
+						/>
+					</svg>
 				</button>
 			</div>
 		</div>
@@ -767,7 +735,7 @@
 		{#if related.length > 0}
 			<section class="border-t border-[rgba(255,255,255,0.08)] pt-12">
 				<h3 class="mb-6 font-mono text-xs font-bold tracking-widest text-[#22D3EE] uppercase">
-					Related Transmissions
+					Related Feed
 				</h3>
 
 				<div class="group relative">

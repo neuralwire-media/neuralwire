@@ -349,7 +349,7 @@ func (s *Server) writeError(w http.ResponseWriter, status int, message string) {
 // instead of index.html to prevent Soft 404 indexing.
 func (s *Server) isValidFrontendRoute(cleanPath string) bool {
 	switch cleanPath {
-	case "", "about", "copyright", "search":
+	case "", "about", "bookmarks", "copyright", "search":
 		return true
 	}
 
@@ -527,10 +527,10 @@ func (s *Server) serveIndexHTML(w http.ResponseWriter, r *http.Request) {
 		ogImage := ai.GetDynamicOGURL("Search", "Search AI News & Research Archives", "", 0)
 		content = injectSEOTags(content, title, desc, pageURL, ogImage, "website")
 	} else if cleanPath == "bookmarks" {
-		title := "Saved Transmissions | NeuralWire"
+		title := "Saved Archives | NeuralWire"
 		desc := "Your saved articles and offline intelligence bookmarks."
 		pageURL := "https://neuralwire.info/bookmarks"
-		ogImage := ai.GetDynamicOGURL("Bookmarks", "Saved Transmissions & Offline Intelligence", "", 0)
+		ogImage := ai.GetDynamicOGURL("Bookmarks", "Saved Archives & Offline Intelligence", "", 0)
 		content = injectSEOTags(content, title, desc, pageURL, ogImage, "website")
 	} else if strings.HasPrefix(cleanPath, "category/") {
 		catSlug := strings.TrimPrefix(cleanPath, "category/")

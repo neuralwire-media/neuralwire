@@ -74,7 +74,7 @@
 							Neural<span class="text-[#22D3EE]">wire</span>
 						</span>
 					</a>
-					<span class="font-mono text-slate-600">/</span>
+					<span class="font-mono text-slate-600">•</span>
 					<span class="font-mono text-xs tracking-wider text-slate-400">Admin Panel v2.0</span>
 				</div>
 
