@@ -122,6 +122,12 @@ func GetDynamicUnsplashURL(category, title string) string {
 
 // GetDynamicOGURL returns a bespoke Open Graph image URL from https://og.neuralwire.info/api/og.
 func GetDynamicOGURL(category, title, source string, score int) string {
+	return GetDynamicOGURLWithReadTime(category, title, source, "", score)
+}
+
+// GetDynamicOGURLWithReadTime returns a bespoke Open Graph image URL from https://og.neuralwire.info/api/og
+// including optional estimated reading time.
+func GetDynamicOGURLWithReadTime(category, title, source, readTime string, score int) string {
 	base := "https://og.neuralwire.info/api/og"
 	q := url.Values{}
 	cleanTitle := strings.TrimSpace(title)
@@ -138,6 +144,10 @@ func GetDynamicOGURL(category, title, source string, score int) string {
 	}
 	if score > 0 {
 		q.Set("score", strconv.Itoa(score))
+	}
+	cleanRead := strings.TrimSpace(readTime)
+	if cleanRead != "" {
+		q.Set("read_time", cleanRead)
 	}
 	return base + "?" + q.Encode()
 }

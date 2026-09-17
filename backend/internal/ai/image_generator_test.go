@@ -98,4 +98,9 @@ func TestGetDynamicOGURLParams(t *testing.T) {
 	if !strings.Contains(url, "score=92") {
 		t.Errorf("missing score param in url: %s", url)
 	}
+
+	urlWithRead := GetDynamicOGURLWithReadTime("Research", "DeepSeek V3 Model", "ArXiv", "3 min read", 92)
+	if !strings.Contains(urlWithRead, "read_time=3+min+read") {
+		t.Errorf("missing read_time param in url: %s", urlWithRead)
+	}
 }
