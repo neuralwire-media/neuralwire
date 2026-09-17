@@ -397,6 +397,17 @@
 							>COPYRIGHT & DMCA</a
 						>
 					</li>
+					<li>
+						<a
+							href="https://status.neuralwire.info"
+							target="_blank"
+							rel="noopener noreferrer"
+							class="flex items-center gap-1.5 text-slate-400 transition-colors hover:text-[#22D3EE]"
+						>
+							<span class="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+							SYSTEM STATUS
+						</a>
+					</li>
 				</ul>
 			</div>
 

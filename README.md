@@ -4,7 +4,7 @@
 
 > An editorial news portal for artificial intelligence, neural networks, and the future of computation. Bridging the gap between silicon and humanity.
 
-**Live site:** [https://neuralwire.info](https://neuralwire.info)
+**Live site:** [https://neuralwire.info](https://neuralwire.info) &nbsp;|&nbsp; **Status Page:** [https://status.neuralwire.info](https://status.neuralwire.info)
 
 ---
 

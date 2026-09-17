@@ -207,6 +207,17 @@
 				<span>View Copyright & DMCA Takedown Policy</span>
 				<span>&rarr;</span>
 			</a>
+			<span class="text-slate-600">•</span>
+			<a
+				href="https://status.neuralwire.info"
+				target="_blank"
+				rel="noopener noreferrer"
+				class="inline-flex items-center gap-1.5 text-slate-300 transition-colors hover:text-[#22D3EE]"
+			>
+				<span class="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+				<span>System Status & Uptime</span>
+				<span>&rarr;</span>
+			</a>
 		</div>
 	</div>
 
