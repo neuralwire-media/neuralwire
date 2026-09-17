@@ -1,5 +1,38 @@
+<script lang="ts">
+	import { getSiteUrl } from '$lib/siteUrl';
+	import { getOgImageUrl } from '$lib/og';
+
+	const copyrightOgImage = getOgImageUrl({
+		title: 'Copyright, Fair Use & DMCA Takedown Policy',
+		category: 'Legal'
+	});
+</script>
+
 <svelte:head>
 	<title>Copyright & DMCA Policy | NeuralWire</title>
+	<meta
+		name="description"
+		content="Copyright, Fair Use, and DMCA takedown notice policies for the Neuralwire AI news aggregation platform."
+	/>
+	<meta name="robots" content="index, follow" />
+	<link rel="canonical" href="{getSiteUrl()}/copyright" />
+	<meta property="og:title" content="Copyright & DMCA Policy | NeuralWire" />
+	<meta
+		property="og:description"
+		content="Copyright, Fair Use, and DMCA takedown notice policies for the Neuralwire AI news aggregation platform."
+	/>
+	<meta property="og:type" content="website" />
+	<meta property="og:url" content="{getSiteUrl()}/copyright" />
+	<meta property="og:image" content={copyrightOgImage} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content="Copyright & DMCA Policy | NeuralWire" />
+	<meta
+		name="twitter:description"
+		content="Copyright, Fair Use, and DMCA takedown notice policies for the Neuralwire AI news aggregation platform."
+	/>
+	<meta name="twitter:image" content={copyrightOgImage} />
 </svelte:head>
 
 <section class="mx-auto w-full max-w-3xl flex-grow px-4 py-16 sm:px-6 md:py-24 lg:px-8">

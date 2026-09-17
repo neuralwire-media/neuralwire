@@ -5,12 +5,23 @@
 	import BookmarkButton from '$lib/BookmarkButton.svelte';
 	import { absoluteUrl, getSiteUrl } from '$lib/siteUrl';
 	import { BASE_URL } from '$lib/api';
+	import { getOgImageUrl } from '$lib/og';
 
 	let { data }: { data: PageData } = $props();
 
 	const article = $derived(data.article as News);
 	const related = $derived(data.related as News[]);
 	const displayItems = $derived([...related, ...related, ...related]);
+
+	const socialOgImageUrl = $derived(
+		getOgImageUrl({
+			title: article.title,
+			category: article.category,
+			source: article.source,
+			score: article.value_score,
+			readTime: getReadingTime(article.summary || article.content)
+		})
+	);
 
 	let copied = $state(false);
 
@@ -289,17 +300,19 @@
 	<meta name="description" content={article.summary} />
 	<meta name="robots" content="index, follow" />
 	<link rel="canonical" href="{getSiteUrl()}/{article.slug}" />
-	<!-- Article Specific OG -->
+	<!-- Article Specific OG (Branded Social Card First) -->
 	<meta property="og:title" content={article.title} />
 	<meta property="og:description" content={article.summary} />
 	<meta property="og:type" content="article" />
 	<meta property="og:url" content="{getSiteUrl()}/{article.slug}" />
-	<meta property="og:image" content={absoluteUrl(article.image_url)} />
+	<meta property="og:image" content={socialOgImageUrl} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
 	<!-- Twitter Card -->
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={article.title} />
 	<meta name="twitter:description" content={article.summary} />
-	<meta name="twitter:image" content={absoluteUrl(article.image_url)} />
+	<meta name="twitter:image" content={socialOgImageUrl} />
 	<!-- Structured data: NewsArticle -->
 	{@html articleJsonLdHtml}
 </svelte:head>
