@@ -435,6 +435,67 @@ func TestListValidation(t *testing.T) {
 	if rec := doJSON(t, s, http.MethodGet, "/api/news?page_size=1000", nil); rec.Code != http.StatusOK {
 		t.Errorf("page_size=1000 status = %d, want 200 (clamped)", rec.Code)
 	}
+	if rec := doJSON(t, s, http.MethodGet, "/api/news?offset=abc", nil); rec.Code != http.StatusBadRequest {
+		t.Errorf("offset=abc status = %d, want 400", rec.Code)
+	}
+	if rec := doJSON(t, s, http.MethodGet, "/api/news?offset=-1", nil); rec.Code != http.StatusBadRequest {
+		t.Errorf("offset=-1 status = %d, want 400", rec.Code)
+	}
+	if rec := doJSON(t, s, http.MethodGet, "/api/news?offset=0", nil); rec.Code != http.StatusOK {
+		t.Errorf("offset=0 status = %d, want 200", rec.Code)
+	}
+}
+
+func TestListNewsOffset(t *testing.T) {
+	s := newTestServer(t)
+	token := adminToken(t, s)
+
+	for i := 1; i <= 5; i++ {
+		create := doJSONAs(t, s, http.MethodPost, "/api/admin/news", map[string]any{
+			"title":       fmt.Sprintf("Article %d", i),
+			"summary":     "Summary",
+			"category":    "ai",
+			"source":      "Source",
+			"url":         fmt.Sprintf("https://example.com/art-%d", i),
+			"content":     "Content",
+			"value_label": "High Impact",
+		}, token)
+		created := decodeNews(t, create)
+		doJSONAs(t, s, http.MethodPost, fmt.Sprintf("/api/admin/news/%d/publish", created.ID), nil, token)
+	}
+
+	rec0 := doJSON(t, s, http.MethodGet, "/api/news?offset=0&page_size=2", nil)
+	if rec0.Code != http.StatusOK {
+		t.Fatalf("offset=0 status = %d, want 200", rec0.Code)
+	}
+	list0 := decodeList(t, rec0)
+	if len(list0.Data) != 2 {
+		t.Fatalf("len(list0.Data) = %d, want 2", len(list0.Data))
+	}
+	if list0.Pagination.Total != 5 {
+		t.Errorf("total = %d, want 5", list0.Pagination.Total)
+	}
+
+	rec2 := doJSON(t, s, http.MethodGet, "/api/news?offset=2&page_size=2", nil)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("offset=2 status = %d, want 200", rec2.Code)
+	}
+	list2 := decodeList(t, rec2)
+	if len(list2.Data) != 2 {
+		t.Fatalf("len(list2.Data) = %d, want 2", len(list2.Data))
+	}
+	if list0.Data[1].ID == list2.Data[0].ID {
+		t.Errorf("unexpected duplicate ID: %d", list0.Data[1].ID)
+	}
+
+	rec4 := doJSON(t, s, http.MethodGet, "/api/news?offset=4&page_size=2", nil)
+	if rec4.Code != http.StatusOK {
+		t.Fatalf("offset=4 status = %d, want 200", rec4.Code)
+	}
+	list4 := decodeList(t, rec4)
+	if len(list4.Data) != 1 {
+		t.Fatalf("len(list4.Data) = %d, want 1", len(list4.Data))
+	}
 }
 
 func TestCreateValidation(t *testing.T) {
@@ -1558,7 +1619,7 @@ func TestStaticFallbackRouting(t *testing.T) {
 		t.Errorf("GET / = %d, want 200", rec.Code)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, `<link rel="preload" as="fetch" href="/api/news?page_size=15" crossorigin>`) {
+	if !strings.Contains(body, `<link rel="preload" as="fetch" href="/api/news?page_size=16" crossorigin>`) {
 		t.Errorf("GET / missing news API preload, got: %s", body)
 	}
 	if !strings.Contains(body, `<link rel="preload" as="fetch" href="/api/news/trending?window=week&limit=10" crossorigin>`) {

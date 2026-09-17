@@ -93,7 +93,8 @@ export async function getNewsPage(
 	categorySlug?: string,
 	searchQuery?: string,
 	page: number = 1,
-	pageSize: number = 15
+	pageSize: number = 15,
+	offset?: number
 ): Promise<PaginatedNews> {
 	const f = getFetch(customFetch);
 
@@ -107,6 +108,9 @@ export async function getNewsPage(
 	}
 	params.set('page', String(page));
 	params.set('page_size', String(pageSize));
+	if (offset !== undefined) {
+		params.set('offset', String(offset));
+	}
 
 	const url = `${BASE_URL}/news?${params.toString()}`;
 	const result = await fetchJsonCached<{

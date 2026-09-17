@@ -122,7 +122,21 @@ func (r *NewsRepository) slugExists(s string) (bool, error) {
 // queries are split into tokens and matched with AND semantics (each token
 // must appear in the title or summary), so "gemma model" finds articles
 // containing both words anywhere.
+// ListPublished returns a page of published articles ordered by publish
+// date descending.
 func (r *NewsRepository) ListPublished(category, query string, page, pageSize int) ([]models.News, int, error) {
+	return r.ListPublishedOffset(category, query, (page-1)*pageSize, pageSize)
+}
+
+// ListPublishedOffset returns published articles ordered by publish date descending
+// supporting arbitrary offset and limit.
+func (r *NewsRepository) ListPublishedOffset(category, query string, offset, limit int) ([]models.News, int, error) {
+	if offset < 0 {
+		offset = 0
+	}
+	if limit <= 0 {
+		limit = 15
+	}
 	where := "WHERE status = ?"
 	args := []any{string(models.StatusPublished)}
 	if category != "" {
@@ -151,7 +165,7 @@ func (r *NewsRepository) ListPublished(category, query string, page, pageSize in
 
 	querySQL := `SELECT ` + newsColumns + ` FROM news ` + where +
 		` ORDER BY published_at DESC, id DESC LIMIT ? OFFSET ?`
-	args = append(args, pageSize, (page-1)*pageSize)
+	args = append(args, limit, offset)
 
 	rows, err := r.db.Query(querySQL, args...)
 	if err != nil {
@@ -159,7 +173,7 @@ func (r *NewsRepository) ListPublished(category, query string, page, pageSize in
 	}
 	defer rows.Close()
 
-	news := make([]models.News, 0, pageSize)
+	news := make([]models.News, 0, limit)
 	for rows.Next() {
 		n, err := scanNews(rows)
 		if err != nil {
