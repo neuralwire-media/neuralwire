@@ -329,6 +329,12 @@
 		<div class="mb-8">
 			<a
 				href="/"
+				onclick={(e) => {
+					if (typeof window !== 'undefined' && window.history.length > 1) {
+						e.preventDefault();
+						window.history.back();
+					}
+				}}
 				class="group inline-flex items-center space-x-2 font-mono text-xs text-slate-400 transition-colors hover:text-[#22D3EE]"
 			>
 				<svg
