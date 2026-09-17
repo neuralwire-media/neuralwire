@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import type { PageData } from './$types';
+	import type { PageData, Snapshot } from './$types';
 	import type { News } from '$lib/mockData';
 	import Image from '$lib/Image.svelte';
 	import BookmarkButton from '$lib/BookmarkButton.svelte';
@@ -46,6 +46,35 @@
 	});
 
 	let loadedFeeds = $state<Record<string, FeedState>>({});
+
+	interface PageSnapshot {
+		activeCategory: string;
+		loadedFeeds: Record<string, FeedState>;
+		heroIndex: number;
+		scrollY: number;
+	}
+
+	export const snapshot: Snapshot<PageSnapshot> = {
+		capture: () => ({
+			activeCategory,
+			loadedFeeds: $state.snapshot(loadedFeeds),
+			heroIndex,
+			scrollY: typeof window !== 'undefined' ? window.scrollY : 0
+		}),
+		restore: (value) => {
+			activeCategory = value.activeCategory;
+			loadedFeeds = value.loadedFeeds;
+			heroIndex = value.heroIndex;
+			if (typeof window !== 'undefined' && value.scrollY > 0) {
+				tick().then(() => {
+					window.scrollTo({ top: value.scrollY, behavior: 'instant' });
+					requestAnimationFrame(() => {
+						window.scrollTo({ top: value.scrollY, behavior: 'instant' });
+					});
+				});
+			}
+		}
+	};
 
 	const currentFeed = $derived(
 		loadedFeeds[activeCategory] ??

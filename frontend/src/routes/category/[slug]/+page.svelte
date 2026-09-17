@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import type { PageData } from './$types';
+	import type { PageData, Snapshot } from './$types';
 	import type { News } from '$lib/mockData';
 	import Image from '$lib/Image.svelte';
 	import BookmarkButton from '$lib/BookmarkButton.svelte';
@@ -24,13 +24,41 @@
 	let loadedArticles = $state<News[] | null>(null);
 	let currentPage = $state(1);
 	let isLoadingMore = $state(false);
+	let currentCategorySlug = $state(category.slug);
 
 	$effect(() => {
-		if (category.slug) {
+		if (category.slug !== currentCategorySlug) {
+			currentCategorySlug = category.slug;
 			loadedArticles = null;
 			currentPage = 1;
 		}
 	});
+
+	interface CategorySnapshot {
+		loadedArticles: News[] | null;
+		currentPage: number;
+		scrollY: number;
+	}
+
+	export const snapshot: Snapshot<CategorySnapshot> = {
+		capture: () => ({
+			loadedArticles: loadedArticles ? $state.snapshot(loadedArticles) : null,
+			currentPage,
+			scrollY: typeof window !== 'undefined' ? window.scrollY : 0
+		}),
+		restore: (value) => {
+			loadedArticles = value.loadedArticles;
+			currentPage = value.currentPage;
+			if (typeof window !== 'undefined' && value.scrollY > 0) {
+				tick().then(() => {
+					window.scrollTo({ top: value.scrollY, behavior: 'instant' });
+					requestAnimationFrame(() => {
+						window.scrollTo({ top: value.scrollY, behavior: 'instant' });
+					});
+				});
+			}
+		}
+	};
 
 	const articles = $derived(loadedArticles ?? initialArticles);
 	const hasMore = $derived(articles.length < totalItems);
