@@ -396,7 +396,20 @@ func (s *Server) handleListNews(w http.ResponseWriter, r *http.Request) {
 		pageSize = maxPageSize
 	}
 
-	news, total, err := s.newsRepo.ListPublished(category, query, page, pageSize)
+	var offset int
+	rawOffset := r.URL.Query().Get("offset")
+	if rawOffset != "" {
+		var err error
+		offset, err = parseNonNegativeInt(rawOffset, 0)
+		if err != nil {
+			s.writeError(w, http.StatusBadRequest, "invalid offset parameter")
+			return
+		}
+	} else {
+		offset = (page - 1) * pageSize
+	}
+
+	news, total, err := s.newsRepo.ListPublishedOffset(category, query, offset, pageSize)
 	if err != nil {
 		s.logger.Printf("api: list news: %v", err)
 		s.writeError(w, http.StatusInternalServerError, "failed to list news")
@@ -411,10 +424,15 @@ func (s *Server) handleListNews(w http.ResponseWriter, r *http.Request) {
 		news = []models.News{}
 	}
 
+	respPage := page
+	if rawOffset != "" && pageSize > 0 {
+		respPage = (offset / pageSize) + 1
+	}
+
 	s.writeJSON(w, http.StatusOK, paginatedResponse{
 		Data: news,
 		Pagination: pagination{
-			Page:       page,
+			Page:       respPage,
 			PageSize:   pageSize,
 			Total:      total,
 			TotalPages: totalPages,
@@ -1630,6 +1648,17 @@ func parsePositiveInt(raw string, fallback int) (int, error) {
 	n, err := strconv.Atoi(strings.TrimSpace(raw))
 	if err != nil || n < 1 {
 		return 0, errors.New("invalid integer")
+	}
+	return n, nil
+}
+
+func parseNonNegativeInt(raw string, fallback int) (int, error) {
+	if strings.TrimSpace(raw) == "" {
+		return fallback, nil
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n < 0 {
+		return 0, errors.New("invalid non-negative integer")
 	}
 	return n, nil
 }

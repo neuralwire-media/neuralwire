@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import type { PageData } from './$types';
 	import type { News } from '$lib/mockData';
 	import Image from '$lib/Image.svelte';
@@ -62,8 +62,8 @@
 	const visibleFeed = $derived(currentFeed.articles);
 	const topFeed = $derived(visibleFeed.slice(0, 6));
 	const streamFeed = $derived(visibleFeed.slice(6));
-	const hasMore = $derived(currentFeed.page < currentFeed.totalPages);
-	const canCollapse = $derived(currentFeed.articles.length > 15 || currentFeed.page > 1);
+	const hasMore = $derived(currentFeed.articles.length < currentFeed.total);
+	const canCollapse = $derived(currentFeed.articles.length > 16 || currentFeed.page > 1);
 
 	const categories = $derived([
 		{ name: 'All News', slug: 'all' },
@@ -111,7 +111,7 @@
 		if (slug !== 'all' && !loadedFeeds[slug]) {
 			isCategoryLoading = true;
 			try {
-				const res = await getNewsPage(fetch, slug, undefined, 1, 15);
+				const res = await getNewsPage(fetch, slug, undefined, 1, 16);
 				loadedFeeds[slug] = {
 					articles: res.articles,
 					page: 1,
@@ -128,13 +128,17 @@
 
 	async function loadMore() {
 		const feed = currentFeed;
-		if (isLoadingMore || feed.page >= feed.totalPages) return;
+		if (isLoadingMore || feed.articles.length >= feed.total) return;
+
+		const scrollY = typeof window !== 'undefined' ? window.scrollY : 0;
+		(document.activeElement as HTMLElement)?.blur?.();
 
 		isLoadingMore = true;
 		try {
 			const nextPage = feed.page + 1;
 			const catParam = activeCategory === 'all' ? undefined : activeCategory;
-			const res = await getNewsPage(fetch, catParam, undefined, nextPage, 15);
+			const currentOffset = feed.articles.length;
+			const res = await getNewsPage(fetch, catParam, undefined, nextPage, 15, currentOffset);
 
 			const existingIds = new Set(feed.articles.map((a) => a.id));
 			const newArticles = res.articles.filter((a) => !existingIds.has(a.id));
@@ -145,6 +149,14 @@
 				totalPages: res.totalPages,
 				total: res.total
 			};
+
+			await tick();
+			if (typeof window !== 'undefined') {
+				window.scrollTo({ top: scrollY, behavior: 'instant' });
+				requestAnimationFrame(() => {
+					window.scrollTo({ top: scrollY, behavior: 'instant' });
+				});
+			}
 		} catch (err) {
 			console.error(`Failed to load more news for category '${activeCategory}':`, err);
 		} finally {
@@ -158,7 +170,7 @@
 		} else if (loadedFeeds[activeCategory]) {
 			loadedFeeds[activeCategory] = {
 				...loadedFeeds[activeCategory],
-				articles: loadedFeeds[activeCategory].articles.slice(0, 15),
+				articles: loadedFeeds[activeCategory].articles.slice(0, 16),
 				page: 1
 			};
 		}
@@ -524,7 +536,10 @@
 {/snippet}
 
 <!-- News Feed Section -->
-<section id="chronicle-feed" class="mx-auto max-w-7xl px-4 py-12 sm:px-6 md:py-16 lg:px-8">
+<section
+	id="chronicle-feed"
+	class="mx-auto max-w-7xl px-4 py-12 [overflow-anchor:none] sm:px-6 md:py-16 lg:px-8"
+>
 	<!-- Feed Title & Categories Filter (Full Width Header) -->
 	<div
 		class="mb-8 flex flex-col justify-between gap-4 border-b border-[rgba(255,255,255,0.08)] pb-6 md:flex-row md:items-end"
@@ -618,7 +633,7 @@
 
 	<!-- Bottom Section: Full Width Extended Grid (Article 7 onwards, up to 5 cols on 2xl) -->
 	{#if !isCategoryLoading && streamFeed.length > 0}
-		<div class="mt-8 border-t border-[rgba(255,255,255,0.06)] pt-8">
+		<div class="mt-8 border-t border-[rgba(255,255,255,0.06)] pt-8 [overflow-anchor:none]">
 			<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8 2xl:grid-cols-5">
 				{#each streamFeed as post (post.id)}
 					{@render newsCard(post)}
@@ -630,7 +645,7 @@
 	<!-- Pagination / Load More Controls (Full Width) -->
 	{#if !isCategoryLoading && visibleFeed.length > 0}
 		{#if hasMore}
-			<div class="mt-12 flex flex-wrap items-center justify-center gap-4">
+			<div class="mt-12 flex flex-wrap items-center justify-center gap-4 [overflow-anchor:none]">
 				<button
 					type="button"
 					onclick={loadMore}

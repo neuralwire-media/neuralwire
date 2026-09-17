@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import type { PageData } from './$types';
 	import type { News } from '$lib/mockData';
 	import Image from '$lib/Image.svelte';
@@ -12,7 +13,6 @@
 	const category = $derived(data.category);
 	const initialArticles = $derived(data.news as News[]);
 	const totalItems = $derived(data.total ?? (data.news as News[]).length);
-	const initialTotalPages = $derived(data.totalPages ?? 1);
 
 	const categoryOgImage = $derived(
 		getOgImageUrl({
@@ -23,19 +23,17 @@
 
 	let loadedArticles = $state<News[] | null>(null);
 	let currentPage = $state(1);
-	let totalPages = $state(1);
 	let isLoadingMore = $state(false);
 
 	$effect(() => {
 		if (category.slug) {
 			loadedArticles = null;
 			currentPage = 1;
-			totalPages = initialTotalPages;
 		}
 	});
 
 	const articles = $derived(loadedArticles ?? initialArticles);
-	const hasMore = $derived(currentPage < (loadedArticles ? totalPages : initialTotalPages));
+	const hasMore = $derived(articles.length < totalItems);
 	const canCollapse = $derived(articles.length > 15 || currentPage > 1);
 
 	function formatDate(dateStr: string) {
@@ -54,20 +52,30 @@
 	}
 
 	async function loadMore() {
-		const maxPages = loadedArticles ? totalPages : initialTotalPages;
-		if (isLoadingMore || currentPage >= maxPages) return;
+		if (isLoadingMore || articles.length >= totalItems) return;
+
+		const scrollY = typeof window !== 'undefined' ? window.scrollY : 0;
+		(document.activeElement as HTMLElement)?.blur?.();
 
 		isLoadingMore = true;
 		try {
 			const nextPage = currentPage + 1;
-			const res = await getNewsPage(fetch, category.slug, undefined, nextPage, 15);
 			const currentList = loadedArticles ?? initialArticles;
+			const currentOffset = currentList.length;
+			const res = await getNewsPage(fetch, category.slug, undefined, nextPage, 15, currentOffset);
 			const existingIds = new Set(currentList.map((a) => a.id));
 			const newArticles = res.articles.filter((a) => !existingIds.has(a.id));
 
 			loadedArticles = [...currentList, ...newArticles];
 			currentPage = nextPage;
-			totalPages = res.totalPages;
+
+			await tick();
+			if (typeof window !== 'undefined') {
+				window.scrollTo({ top: scrollY, behavior: 'instant' });
+				requestAnimationFrame(() => {
+					window.scrollTo({ top: scrollY, behavior: 'instant' });
+				});
+			}
 		} catch (err) {
 			console.error(`Failed to load more news for category '${category.slug}':`, err);
 		} finally {
@@ -112,7 +120,10 @@
 	<meta name="twitter:image" content={categoryOgImage} />
 </svelte:head>
 
-<section id="category-feed" class="mx-auto max-w-7xl flex-grow px-4 py-12 sm:px-6 md:py-16 lg:px-8">
+<section
+	id="category-feed"
+	class="mx-auto max-w-7xl flex-grow px-4 py-12 [overflow-anchor:none] sm:px-6 md:py-16 lg:px-8"
+>
 	<!-- Category Page Header -->
 	<div class="mb-12 border-b border-[rgba(255,255,255,0.08)] pb-8">
 		<span class="tag-mono mb-2 block text-xs font-bold tracking-widest text-[#22D3EE]"
@@ -125,7 +136,9 @@
 
 	<!-- Articles Grid -->
 	{#if articles.length > 0}
-		<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8 2xl:grid-cols-5">
+		<div
+			class="grid grid-cols-1 gap-6 [overflow-anchor:none] md:grid-cols-2 lg:grid-cols-3 lg:gap-8 2xl:grid-cols-5"
+		>
 			{#each articles as post (post.id)}
 				<article
 					class="group glow-hover flex flex-col overflow-hidden rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#0F172A]/25"
@@ -220,7 +233,7 @@
 		</div>
 
 		{#if hasMore}
-			<div class="mt-12 flex flex-wrap items-center justify-center gap-4">
+			<div class="mt-12 flex flex-wrap items-center justify-center gap-4 [overflow-anchor:none]">
 				<button
 					type="button"
 					onclick={loadMore}
