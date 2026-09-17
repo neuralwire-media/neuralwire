@@ -474,7 +474,15 @@
 		<div class="flex flex-col items-end gap-2 text-right">
 			<div class="space-y-0.5 font-mono text-[10px] text-slate-500">
 				<div>System Time: <span class="text-slate-300">{serverTime}</span></div>
-				<div>API Status: <span class="font-bold text-[#22D3EE]">Online</span></div>
+				<div>
+					API Status: <a
+						href="https://status.neuralwire.info"
+						target="_blank"
+						rel="noopener noreferrer"
+						class="font-bold text-[#22D3EE] transition-colors hover:underline"
+						title="Open Public System Status">Online ↗</a
+					>
+				</div>
 				{#if lastFetchInfo}
 					<div>
 						Last Fetch: <span class="text-[#22D3EE]">{lastFetchInfo.time}</span>
