@@ -1626,14 +1626,64 @@ func TestStaticFallbackRouting(t *testing.T) {
 		t.Errorf("GET /%s missing imagesrcset in preload", vergeNews.Slug)
 	}
 
-	// 9. Single article replaces fallback title and meta description
-	seoIndexHTML := `<!doctype html><html><head><title>Neuralwire | AI News, Neural Networks &amp; Future Computation</title><meta name="description" content="Curated intelligence on frontier AI research, neural networks, machine learning, and computational industry." /></head><body>App</body></html>`
+	// 9. Single article replaces fallback title, meta description, and injects dynamic Open Graph tags
+	seoIndexHTML := `<!doctype html><html><head>
+		<title>NeuralWire | AI News, Neural Networks &amp; Future Computation</title>
+		<meta name="description" content="Curated intelligence on frontier AI research, neural networks, machine learning, and computational industry." />
+		<link rel="canonical" href="https://neuralwire.info" />
+		<meta property="og:title" content="NeuralWire | AI News, Neural Networks &amp; Future Computation" />
+		<meta property="og:description" content="Curated intelligence on frontier AI research, neural networks, machine learning, and computational industry." />
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content="https://neuralwire.info" />
+		<meta property="og:image" content="https://neuralwire.info/web-app-manifest-512x512.png" />
+		<meta name="twitter:title" content="NeuralWire | AI News, Neural Networks &amp; Future Computation" />
+		<meta name="twitter:description" content="Curated intelligence on frontier AI research, neural networks, machine learning, and computational industry." />
+		<meta name="twitter:image" content="https://neuralwire.info/web-app-manifest-512x512.png" />
+	</head><body>App</body></html>`
 	_ = os.WriteFile(tmpDir+"/index.html", []byte(seoIndexHTML), 0644)
 	req = httptest.NewRequest(http.MethodGet, "/"+vergeNews.Slug, nil)
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if !strings.Contains(rec.Body.String(), "<title>Verge AI Article | Neuralwire</title>") {
-		t.Errorf("GET /%s missing article title, got: %s", vergeNews.Slug, rec.Body.String())
+	respBody := rec.Body.String()
+	if !strings.Contains(respBody, "<title>Verge AI Article | NeuralWire</title>") {
+		t.Errorf("GET /%s missing article title, got: %s", vergeNews.Slug, respBody)
+	}
+	if !strings.Contains(respBody, `<meta property="og:title" content="Verge AI Article | NeuralWire" />`) {
+		t.Errorf("GET /%s missing og:title, got: %s", vergeNews.Slug, respBody)
+	}
+	if !strings.Contains(respBody, `<meta property="og:type" content="article" />`) {
+		t.Errorf("GET /%s missing og:type=article, got: %s", vergeNews.Slug, respBody)
+	}
+	if !strings.Contains(respBody, `<meta property="og:url" content="https://neuralwire.info/`+vergeNews.Slug+`" />`) {
+		t.Errorf("GET /%s missing og:url, got: %s", vergeNews.Slug, respBody)
+	}
+	if !strings.Contains(respBody, `og.neuralwire.info/api/og?`) {
+		t.Errorf("GET /%s missing dynamic og:image, got: %s", vergeNews.Slug, respBody)
+	}
+	if !strings.Contains(respBody, `<link rel="canonical" href="https://neuralwire.info/`+vergeNews.Slug+`" />`) {
+		t.Errorf("GET /%s missing canonical link, got: %s", vergeNews.Slug, respBody)
+	}
+
+	// 10. Category route replaces fallback title and meta description
+	catSlug, _ := catRepo.EnsureCreated("Quantum Computing")
+	req = httptest.NewRequest(http.MethodGet, "/category/"+catSlug, nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	catBody := rec.Body.String()
+	if !strings.Contains(catBody, "<title>Quantum Computing | NeuralWire</title>") {
+		t.Errorf("GET /category/%s missing category title, got: %s", catSlug, catBody)
+	}
+	if !strings.Contains(catBody, `https://neuralwire.info/category/`+catSlug) {
+		t.Errorf("GET /category/%s missing category URL, got: %s", catSlug, catBody)
+	}
+
+	// 11. Static route /about replaces fallback with about SEO tags
+	req = httptest.NewRequest(http.MethodGet, "/about", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	aboutBody := rec.Body.String()
+	if !strings.Contains(aboutBody, "<title>About | NeuralWire AI News &amp; Editorial Curation</title>") {
+		t.Errorf("GET /about missing about title, got: %s", aboutBody)
 	}
 }
 

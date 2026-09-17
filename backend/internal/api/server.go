@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"neuralwire/backend/internal/ai"
 	"neuralwire/backend/internal/auth"
 	"neuralwire/backend/internal/cache"
 	"neuralwire/backend/internal/fetcher"
@@ -422,8 +423,61 @@ func (s *Server) serveNotFound(w http.ResponseWriter, r *http.Request) {
 </html>`))
 }
 
+var (
+	titleTagRegex      = regexp.MustCompile(`(?is)<title\b[^>]*>.*?</title>`)
+	metaDescRegex      = regexp.MustCompile(`(?is)<meta\s+[^>]*name=["']description["'][^>]*>`)
+	metaOgTitleRegex   = regexp.MustCompile(`(?is)<meta\s+[^>]*property=["']og:title["'][^>]*>`)
+	metaOgDescRegex    = regexp.MustCompile(`(?is)<meta\s+[^>]*property=["']og:description["'][^>]*>`)
+	metaOgTypeRegex    = regexp.MustCompile(`(?is)<meta\s+[^>]*property=["']og:type["'][^>]*>`)
+	metaOgURLRegex     = regexp.MustCompile(`(?is)<meta\s+[^>]*property=["']og:url["'][^>]*>`)
+	metaOgImageRegex   = regexp.MustCompile(`(?is)<meta\s+[^>]*property=["']og:image["'][^>]*>`)
+	metaTwTitleRegex   = regexp.MustCompile(`(?is)<meta\s+[^>]*name=["']twitter:title["'][^>]*>`)
+	metaTwDescRegex    = regexp.MustCompile(`(?is)<meta\s+[^>]*name=["']twitter:description["'][^>]*>`)
+	metaTwImageRegex   = regexp.MustCompile(`(?is)<meta\s+[^>]*name=["']twitter:image["'][^>]*>`)
+	linkCanonicalRegex = regexp.MustCompile(`(?is)<link\s+[^>]*rel=["']canonical["'][^>]*>`)
+)
+
+func calculateReadingTime(text string) string {
+	if text == "" {
+		return "1 min read"
+	}
+	words := len(strings.Fields(text))
+	minutes := (words + 219) / 220
+	if minutes < 1 {
+		minutes = 1
+	}
+	return fmt.Sprintf("%d min read", minutes)
+}
+
+func injectSEOTags(content []byte, pageTitle, desc, pageURL, imageURL, ogType string) []byte {
+	if pageTitle != "" {
+		content = titleTagRegex.ReplaceAll(content, []byte("<title>"+html.EscapeString(pageTitle)+"</title>"))
+		content = metaOgTitleRegex.ReplaceAll(content, []byte(`<meta property="og:title" content="`+html.EscapeString(pageTitle)+`" />`))
+		content = metaTwTitleRegex.ReplaceAll(content, []byte(`<meta name="twitter:title" content="`+html.EscapeString(pageTitle)+`" />`))
+	}
+	if desc != "" {
+		content = metaDescRegex.ReplaceAll(content, []byte(`<meta name="description" content="`+html.EscapeString(desc)+`" />`))
+		content = metaOgDescRegex.ReplaceAll(content, []byte(`<meta property="og:description" content="`+html.EscapeString(desc)+`" />`))
+		content = metaTwDescRegex.ReplaceAll(content, []byte(`<meta name="twitter:description" content="`+html.EscapeString(desc)+`" />`))
+	}
+	if pageURL != "" {
+		content = metaOgURLRegex.ReplaceAll(content, []byte(`<meta property="og:url" content="`+html.EscapeString(pageURL)+`" />`))
+		if linkCanonicalRegex.Match(content) {
+			content = linkCanonicalRegex.ReplaceAll(content, []byte(`<link rel="canonical" href="`+html.EscapeString(pageURL)+`" />`))
+		}
+	}
+	if imageURL != "" {
+		content = metaOgImageRegex.ReplaceAll(content, []byte(`<meta property="og:image" content="`+html.EscapeString(imageURL)+`" />`))
+		content = metaTwImageRegex.ReplaceAll(content, []byte(`<meta name="twitter:image" content="`+html.EscapeString(imageURL)+`" />`))
+	}
+	if ogType != "" {
+		content = metaOgTypeRegex.ReplaceAll(content, []byte(`<meta property="og:type" content="`+html.EscapeString(ogType)+`" />`))
+	}
+	return content
+}
+
 // serveIndexHTML serves the SPA entrypoint index.html, dynamically injecting
-// API fetch preloads, image preconnects, and an LCP cover image preload link in <head>.
+// SEO/OpenGraph meta tags, API fetch preloads, image preconnects, and an LCP cover image preload link in <head>.
 func (s *Server) serveIndexHTML(w http.ResponseWriter, r *http.Request) {
 	indexPath := filepath.Join(s.staticDir, "index.html")
 	content, err := os.ReadFile(indexPath)
@@ -435,30 +489,83 @@ func (s *Server) serveIndexHTML(w http.ResponseWriter, r *http.Request) {
 	cleanPath := strings.Trim(r.URL.Path, "/")
 	var extraPreloads strings.Builder
 	extraPreloads.WriteString("\t\t<link rel=\"preload\" as=\"fetch\" href=\"/api/categories\" crossorigin>\n")
+
+	var preloadImage string
+
 	if cleanPath == "" || cleanPath == "index.html" {
 		extraPreloads.WriteString("\t\t<link rel=\"preload\" as=\"fetch\" href=\"/api/news?page_size=15\" crossorigin>\n")
 		extraPreloads.WriteString("\t\t<link rel=\"preload\" as=\"fetch\" href=\"/api/news/trending?window=week&limit=5\" crossorigin>\n")
-	}
 
-	var preloadImage string
-	if s.newsRepo != nil {
-		if cleanPath == "" || cleanPath == "index.html" {
-			// Homepage: preload latest published article cover image
+		homeTitle := "NeuralWire | AI News, Neural Networks & Future Computation"
+		homeDesc := "Curated intelligence on frontier AI research, neural networks, machine learning, and computational industry."
+		homeURL := "https://neuralwire.info"
+		homeOG := ai.GetDynamicOGURL("AI & Systems", "The AI, Neural Networks & Future of Compute Editorial Chronicle", "", 0)
+		content = injectSEOTags(content, homeTitle, homeDesc, homeURL, homeOG, "website")
+
+		if s.newsRepo != nil {
 			articles, _, err := s.newsRepo.ListPublished("", "", 1, 1)
 			if err == nil && len(articles) > 0 && articles[0].ImageURL != "" {
 				preloadImage = articles[0].ImageURL
 			}
-		} else if !strings.HasPrefix(cleanPath, "category/") && !strings.HasPrefix(cleanPath, "admin") && cleanPath != "about" && cleanPath != "copyright" && cleanPath != "search" && cleanPath != "bookmarks" {
-			// Single article page: preload that article's cover image and inject article SEO tags
+		}
+	} else if cleanPath == "about" {
+		title := "About | NeuralWire AI News & Editorial Curation"
+		desc := "NeuralWire is an independent curation chronicle and AI-assisted digest platform indexing frontier artificial intelligence research, neural architectures, and computational breakthroughs."
+		pageURL := "https://neuralwire.info/about"
+		ogImage := ai.GetDynamicOGURL("Editorial", "About Neuralwire — Editorial Integrity, AI Discovery & Architecture", "", 0)
+		content = injectSEOTags(content, title, desc, pageURL, ogImage, "website")
+	} else if cleanPath == "copyright" {
+		title := "Copyright & DMCA Policy | NeuralWire"
+		desc := "Copyright, Fair Use, and DMCA takedown notice policies for the Neuralwire AI news aggregation platform."
+		pageURL := "https://neuralwire.info/copyright"
+		ogImage := ai.GetDynamicOGURL("Legal", "Copyright, Fair Use & DMCA Takedown Policy", "", 0)
+		content = injectSEOTags(content, title, desc, pageURL, ogImage, "website")
+	} else if cleanPath == "search" {
+		title := "Search AI News & Research Archives | NeuralWire"
+		desc := "Search curated intelligence on frontier AI research, neural networks, machine learning, and computational industry."
+		pageURL := "https://neuralwire.info/search"
+		ogImage := ai.GetDynamicOGURL("Search", "Search AI News & Research Archives", "", 0)
+		content = injectSEOTags(content, title, desc, pageURL, ogImage, "website")
+	} else if cleanPath == "bookmarks" {
+		title := "Saved Transmissions | NeuralWire"
+		desc := "Your saved articles and offline intelligence bookmarks."
+		pageURL := "https://neuralwire.info/bookmarks"
+		ogImage := ai.GetDynamicOGURL("Bookmarks", "Saved Transmissions & Offline Intelligence", "", 0)
+		content = injectSEOTags(content, title, desc, pageURL, ogImage, "website")
+	} else if strings.HasPrefix(cleanPath, "category/") {
+		catSlug := strings.TrimPrefix(cleanPath, "category/")
+		catName := strings.ReplaceAll(catSlug, "-", " ")
+		if s.categoryRepo != nil {
+			cat, err := s.categoryRepo.GetBySlug(catSlug)
+			if err == nil && cat != nil && cat.Name != "" {
+				catName = cat.Name
+			}
+		}
+		title := fmt.Sprintf("%s | NeuralWire", catName)
+		desc := fmt.Sprintf("Curated AI intelligence and frontier research in %s.", catName)
+		pageURL := fmt.Sprintf("https://neuralwire.info/category/%s", catSlug)
+		ogImage := ai.GetDynamicOGURL(catName, fmt.Sprintf("%s Editorial & Research Archive", catName), "", 0)
+		content = injectSEOTags(content, title, desc, pageURL, ogImage, "website")
+	} else if !strings.HasPrefix(cleanPath, "admin") {
+		// Single article page
+		if s.newsRepo != nil {
 			article, err := s.newsRepo.GetBySlug(cleanPath)
 			if err == nil && article != nil {
 				if article.ImageURL != "" {
 					preloadImage = article.ImageURL
 				}
-				articleTitle := html.EscapeString(article.Title) + " | Neuralwire"
-				articleDesc := html.EscapeString(article.Summary)
-				content = bytes.Replace(content, []byte("<title>Neuralwire | AI News, Neural Networks &amp; Future Computation</title>"), []byte("<title>"+articleTitle+"</title>"), 1)
-				content = bytes.Replace(content, []byte(`content="Curated intelligence on frontier AI research, neural networks, machine learning, and computational industry."`), []byte(`content="`+articleDesc+`"`), -1)
+				articleTitle := fmt.Sprintf("%s | NeuralWire", article.Title)
+				articleDesc := article.Summary
+				if articleDesc == "" {
+					articleDesc = article.Title
+				}
+				pageURL := fmt.Sprintf("https://neuralwire.info/%s", article.Slug)
+				readTime := calculateReadingTime(article.Summary)
+				if readTime == "1 min read" && article.Content != "" {
+					readTime = calculateReadingTime(article.Content)
+				}
+				ogImage := ai.GetDynamicOGURLWithReadTime(article.Category, article.Title, article.Source, readTime, article.ValueScore)
+				content = injectSEOTags(content, articleTitle, articleDesc, pageURL, ogImage, "article")
 			}
 		}
 	}
