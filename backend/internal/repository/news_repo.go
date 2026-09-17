@@ -494,9 +494,10 @@ func (r *NewsRepository) RecordView(newsID int64, viewerKey string) error {
 type TrendingWindow string
 
 const (
-	TrendingDay  TrendingWindow = "day"
-	TrendingWeek TrendingWindow = "week"
-	TrendingAll  TrendingWindow = "all"
+	TrendingDay   TrendingWindow = "day"
+	TrendingWeek  TrendingWindow = "week"
+	TrendingMonth TrendingWindow = "month"
+	TrendingAll   TrendingWindow = "all"
 )
 
 // ListTrending returns the most-viewed published articles in the given time
@@ -520,6 +521,9 @@ func (r *NewsRepository) ListTrending(window TrendingWindow, limit int) ([]model
 	case TrendingWeek:
 		where = `AND av.created_at > ?`
 		args = append(args, time.Now().UTC().Add(-7*24*time.Hour).Format(time.RFC3339))
+	case TrendingMonth:
+		where = `AND av.created_at > ?`
+		args = append(args, time.Now().UTC().Add(-30*24*time.Hour).Format(time.RFC3339))
 	}
 
 	query := `

@@ -898,6 +898,25 @@ func TestRecordViewAndTrending(t *testing.T) {
 		t.Errorf("trending[1].ViewCount = %d, want 1", resp.Data[1].ViewCount)
 	}
 
+	// Trending month window (?window=month): A (3) and B (1) should both appear.
+	trMonth := doJSON(t, s, http.MethodGet, "/api/news/trending?window=month&limit=10", nil)
+	if trMonth.Code != http.StatusOK {
+		t.Fatalf("trending month status = %d, want 200", trMonth.Code)
+	}
+	var respMonth struct {
+		Window string        `json:"window"`
+		Data   []models.News `json:"data"`
+	}
+	if err := json.Unmarshal(trMonth.Body.Bytes(), &respMonth); err != nil {
+		t.Fatalf("decode trending month: %v", err)
+	}
+	if respMonth.Window != "month" {
+		t.Errorf("trending month window = %s, want month", respMonth.Window)
+	}
+	if len(respMonth.Data) != 2 {
+		t.Fatalf("trending month len = %d, want 2", len(respMonth.Data))
+	}
+
 	// View on a nonexistent id is a silent no-op (200 ok).
 	rec = doJSON(t, s, http.MethodPost, "/api/news/99999/view", map[string]string{"viewer_key": "x"})
 	if rec.Code != http.StatusOK {
@@ -1542,7 +1561,7 @@ func TestStaticFallbackRouting(t *testing.T) {
 	if !strings.Contains(body, `<link rel="preload" as="fetch" href="/api/news?page_size=15" crossorigin>`) {
 		t.Errorf("GET / missing news API preload, got: %s", body)
 	}
-	if !strings.Contains(body, `<link rel="preload" as="fetch" href="/api/news/trending?window=week&limit=5" crossorigin>`) {
+	if !strings.Contains(body, `<link rel="preload" as="fetch" href="/api/news/trending?window=week&limit=10" crossorigin>`) {
 		t.Errorf("GET / missing trending news API preload, got: %s", body)
 	}
 	if !strings.Contains(body, `<link rel="preload" as="fetch" href="/api/categories" crossorigin>`) {

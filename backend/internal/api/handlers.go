@@ -452,18 +452,18 @@ func (s *Server) handleGetNews(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleTrendingNews returns the most-viewed published articles for the
-// requested window (?window=day|week|all, default week) and limit
-// (?limit=, default 5). Public endpoint. Results are cached briefly (TTL)
+// requested window (?window=day|week|month|all, default week) and limit
+// (?limit=, default 10). Public endpoint. Results are cached briefly (TTL)
 // because the underlying query aggregates the full view log.
 func (s *Server) handleTrendingNews(w http.ResponseWriter, r *http.Request) {
 	window := repository.TrendingWindow(strings.TrimSpace(r.URL.Query().Get("window")))
 	switch window {
-	case repository.TrendingDay, repository.TrendingWeek, repository.TrendingAll:
+	case repository.TrendingDay, repository.TrendingWeek, repository.TrendingMonth, repository.TrendingAll:
 	default:
 		window = repository.TrendingWeek
 	}
 
-	limit := 5
+	limit := 10
 	if v := strings.TrimSpace(r.URL.Query().Get("limit")); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			limit = n
