@@ -85,7 +85,7 @@
 	<!-- Heading Header -->
 	<div class="mb-14 border-b border-[rgba(255,255,255,0.08)] pb-10">
 		<span class="tag-mono mb-3 block text-xs font-bold tracking-widest text-[#22D3EE] uppercase"
-			>// MISSION & MANIFESTO</span
+			>MISSION & MANIFESTO</span
 		>
 		<h1 class="mb-6 font-serif text-4xl font-medium text-white sm:text-5xl">
 			BRIDGING CODE AND HUMANITY
@@ -105,7 +105,7 @@
 	<!-- Core Values Grid -->
 	<div class="mb-16">
 		<span class="tag-mono mb-6 block text-xs font-bold tracking-widest text-[#22D3EE] uppercase"
-			>// EDITORIAL PILLARS</span
+			>EDITORIAL PILLARS</span
 		>
 		<div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
 			<div class="glow-hover rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#0F172A]/20 p-6">
@@ -159,7 +159,7 @@
 	<!-- The Curation Engine (How It Works) -->
 	<div class="mb-16 border-t border-[rgba(255,255,255,0.08)] pt-12">
 		<span class="tag-mono mb-3 block text-xs font-bold tracking-widest text-[#22D3EE] uppercase"
-			>// THE CURATION ENGINE</span
+			>THE CURATION ENGINE</span
 		>
 		<h2 class="mb-6 font-serif text-2xl font-medium text-white sm:text-3xl">
 			How NeuralWire Operates
@@ -167,7 +167,7 @@
 
 		<div class="grid grid-cols-1 gap-6 md:grid-cols-3">
 			<div class="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[#0A0E17]/60 p-5">
-				<div class="mb-3 font-mono text-xs font-bold text-[#22D3EE]">01 / AGGREGATION</div>
+				<div class="mb-3 font-mono text-xs font-bold text-[#22D3EE]">01 AGGREGATION</div>
 				<h3 class="mb-2 font-serif text-base font-medium text-white">Multi-Source Indexing</h3>
 				<p class="font-sans text-xs leading-relaxed text-slate-400">
 					Our automated ingestion pipeline continuously monitors public RSS feeds from leading AI
@@ -176,7 +176,7 @@
 			</div>
 
 			<div class="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[#0A0E17]/60 p-5">
-				<div class="mb-3 font-mono text-xs font-bold text-[#22D3EE]">02 / DISTILLATION</div>
+				<div class="mb-3 font-mono text-xs font-bold text-[#22D3EE]">02 DISTILLATION</div>
 				<h3 class="mb-2 font-serif text-base font-medium text-white">AI-Assisted Synthesis</h3>
 				<p class="font-sans text-xs leading-relaxed text-slate-400">
 					Large language models distill dense findings into concise executive summaries,
@@ -185,7 +185,7 @@
 			</div>
 
 			<div class="rounded-xl border border-[rgba(255,255,255,0.06)] bg-[#0A0E17]/60 p-5">
-				<div class="mb-3 font-mono text-xs font-bold text-[#22D3EE]">03 / ATTRIBUTION</div>
+				<div class="mb-3 font-mono text-xs font-bold text-[#22D3EE]">03 ATTRIBUTION</div>
 				<h3 class="mb-2 font-serif text-base font-medium text-white">Direct Source Citation</h3>
 				<p class="font-sans text-xs leading-relaxed text-slate-400">
 					Every summary provides full credit with an immediate one-click link to the primary source
@@ -198,7 +198,7 @@
 	<!-- Transparency, Fair Use & Editorial Integrity -->
 	<div class="mb-16 rounded-xl border border-[rgba(255,255,255,0.08)] bg-[#0F172A]/30 p-6 sm:p-8">
 		<span class="tag-mono mb-2 block text-xs font-bold tracking-widest text-[#22D3EE] uppercase"
-			>// EDITORIAL TRANSPARENCY & FAIR USE</span
+			>EDITORIAL TRANSPARENCY & FAIR USE</span
 		>
 		<h2 class="mb-4 font-serif text-xl font-medium text-white sm:text-2xl">
 			Fair Use & Discovery Commitment
@@ -213,17 +213,6 @@
 		>
 			<a href="/copyright" class="inline-flex items-center gap-1 text-[#22D3EE] hover:underline">
 				<span>View Copyright & DMCA Takedown Policy</span>
-				<span>&rarr;</span>
-			</a>
-			<span class="text-slate-600">•</span>
-			<a
-				href="https://status.neuralwire.info"
-				target="_blank"
-				rel="noopener noreferrer"
-				class="inline-flex items-center gap-1.5 text-slate-300 transition-colors hover:text-[#22D3EE]"
-			>
-				<span class="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-				<span>System Status & Uptime</span>
 				<span>&rarr;</span>
 			</a>
 		</div>

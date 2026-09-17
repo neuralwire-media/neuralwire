@@ -3,7 +3,6 @@
 	import type { PageData, Snapshot } from './$types';
 	import type { News } from '$lib/mockData';
 	import Image from '$lib/Image.svelte';
-	import BookmarkButton from '$lib/BookmarkButton.svelte';
 	import TrendingNews from '$lib/TrendingNews.svelte';
 	import { getSiteUrl } from '$lib/siteUrl';
 	import { getNewsPage } from '$lib/api';
@@ -340,13 +339,7 @@
 								</div>
 							</div>
 
-							<div class="flex items-center gap-3">
-								<BookmarkButton
-									article={featuredArticle}
-									size="md"
-									showText={true}
-									class="rounded-lg border border-white/10 bg-[#0F172A]/80 px-3.5 py-2 hover:border-[#22D3EE]/40 hover:bg-[#22D3EE]/5"
-								/>
+							<div>
 								<a
 									href="/{featuredArticle.slug}"
 									class="group inline-flex items-center justify-center space-x-2 rounded-lg border border-[#22D3EE]/20 bg-[#22D3EE]/5 px-4 py-2 font-mono text-xs text-[#22D3EE] transition-all duration-300 hover:border-[#22D3EE]/50 hover:bg-[#22D3EE]/10 hover:text-white"
@@ -487,8 +480,8 @@
 					{getCategoryName(post.category)}
 				</span>
 			</div>
-			<div class="absolute top-2 right-2 flex items-center gap-1.5">
-				{#if post.cluster_count && post.cluster_count > 0}
+			{#if post.cluster_count && post.cluster_count > 0}
+				<div class="absolute top-2 right-2 flex items-center gap-1.5">
 					<span
 						class="tag-mono inline-flex items-center gap-1 rounded border border-purple-500/40 bg-[#0A0E17]/90 px-2 py-0.5 text-[10px] font-bold text-purple-300 shadow-sm backdrop-blur-sm"
 						title="{post.cluster_count} sumber lain meliput berita ini"
@@ -508,13 +501,8 @@
 						</svg>
 						+{post.cluster_count} sumber
 					</span>
-				{/if}
-				<BookmarkButton
-					article={post}
-					size="sm"
-					class="rounded border border-white/10 bg-[#0A0E17]/90 p-1 backdrop-blur-sm hover:border-[#22D3EE]/50 hover:bg-[#0A0E17]"
-				/>
-			</div>
+				</div>
+			{/if}
 		</a>
 
 		<!-- Card Body -->
@@ -577,7 +565,7 @@
 			<h2 class="mb-1 font-mono text-xs font-bold tracking-widest text-[#22D3EE] uppercase">
 				Chronicle Feed
 			</h2>
-			<h3 class="font-serif text-2xl font-medium text-white md:text-3xl">LATEST TRANSMISSIONS</h3>
+			<h3 class="font-serif text-2xl font-medium text-white md:text-3xl">LATEST</h3>
 		</div>
 
 		<!-- Category Tabs -->
@@ -697,9 +685,9 @@
 								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
 							></path>
 						</svg>
-						<span>RECEIVING TRANSMISSIONS...</span>
+						<span>LOADING...</span>
 					{:else}
-						<span>LOAD MORE TRANSMISSIONS</span>
+						<span>LOAD MORE</span>
 						<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 							<path
 								stroke-linecap="round"
@@ -716,27 +704,19 @@
 						onclick={collapseFeed}
 						class="cursor-pointer rounded-xl border border-[#E11D48]/30 bg-[#E11D48]/5 px-8 py-3 font-mono text-xs font-bold tracking-widest text-[#E11D48] uppercase transition-all hover:border-[#E11D48] hover:bg-[#E11D48]/10 hover:text-white"
 					>
-						Hide Feed
+						HIDE
 					</button>
 				{/if}
 			</div>
-		{:else}
+		{:else if canCollapse}
 			<div class="mt-12 flex flex-col items-center justify-center gap-4">
-				<div
-					class="inline-flex items-center space-x-2 rounded-full border border-[rgba(255,255,255,0.08)] bg-[#0F172A]/40 px-4 py-1.5 font-mono text-[11px] text-slate-400"
+				<button
+					type="button"
+					onclick={collapseFeed}
+					class="cursor-pointer rounded-xl border border-[#E11D48]/30 bg-[#E11D48]/5 px-8 py-3 font-mono text-xs font-bold tracking-widest text-[#E11D48] uppercase transition-all hover:border-[#E11D48] hover:bg-[#E11D48]/10 hover:text-white"
 				>
-					<span class="h-1.5 w-1.5 animate-pulse rounded-full bg-[#22D3EE]"></span>
-					<span>ALL {currentFeed.total || visibleFeed.length} TRANSMISSIONS INDEXED</span>
-				</div>
-				{#if canCollapse}
-					<button
-						type="button"
-						onclick={collapseFeed}
-						class="cursor-pointer rounded-xl border border-[#E11D48]/30 bg-[#E11D48]/5 px-8 py-3 font-mono text-xs font-bold tracking-widest text-[#E11D48] uppercase transition-all hover:border-[#E11D48] hover:bg-[#E11D48]/10 hover:text-white"
-					>
-						Hide Feed
-					</button>
-				{/if}
+					HIDE
+				</button>
 			</div>
 		{/if}
 
@@ -745,7 +725,7 @@
 				type="button"
 				onclick={collapseFeed}
 				class="fixed right-6 bottom-6 z-40 flex h-10 cursor-pointer items-center justify-center space-x-2 rounded-full border border-[#E11D48]/40 bg-[#0A0E17]/90 px-4 py-2 font-mono text-[10px] font-bold tracking-widest text-[#E11D48] shadow-[0_0_15px_rgba(225,29,72,0.15)] backdrop-blur-sm transition-all hover:border-[#E11D48] hover:bg-[#E11D48]/10 hover:text-white active:scale-95"
-				title="Collapse Feed"
+				title="Collapse"
 			>
 				<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 					<path
@@ -755,7 +735,7 @@
 						d="M5 15l7-7 7 7"
 					/>
 				</svg>
-				<span>COLLAPSE FEED</span>
+				<span>COLLAPSE</span>
 			</button>
 		{/if}
 	{/if}

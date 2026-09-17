@@ -59,7 +59,7 @@
 	</div>
 
 	<span class="tag-mono mb-3 block text-xs font-bold tracking-widest text-[#22D3EE] uppercase"
-		>// LEGAL_TELEMETRY</span
+		>LEGAL TELEMETRY</span
 	>
 	<h1 class="mb-8 font-serif text-3xl font-medium text-white sm:text-4xl md:text-5xl">
 		Copyright & DMCA Policy
@@ -112,8 +112,8 @@
 			class="rounded-xl border border-[rgba(34,211,238,0.15)] bg-[#22D3EE]/5 p-6 font-mono text-xs text-slate-300"
 		>
 			<span class="font-bold text-[#22D3EE]">Copyright Agent:</span> Neuralwire Media<br />
-			<span class="font-bold text-[#22D3EE]">Email Address:</span> stysus@proton.me<br />
-			<span class="font-bold text-[#22D3EE]">Subject:</span> Copyright / DMCA Takedown Request
+			<span class="font-bold text-[#22D3EE]">Email Address:</span> neuralwiremedia@gmail.com<br />
+			<span class="font-bold text-[#22D3EE]">Subject:</span> Copyright & DMCA Takedown Request
 			[NW-ID]<br />
 			<span class="font-bold text-[#22D3EE]">Required Details:</span>
 			<ul class="mt-2 list-disc space-y-1 pl-5">

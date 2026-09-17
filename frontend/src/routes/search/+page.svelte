@@ -3,7 +3,6 @@
 	import type { News } from '$lib/mockData';
 	import { goto } from '$app/navigation';
 	import Image from '$lib/Image.svelte';
-	import BookmarkButton from '$lib/BookmarkButton.svelte';
 	import { getSiteUrl } from '$lib/siteUrl';
 	import { getOgImageUrl } from '$lib/og';
 
@@ -12,7 +11,7 @@
 	const searchOgImage = $derived(
 		getOgImageUrl({
 			title: data.query
-				? `Search: "${data.query}" // Neuralwire Archives`
+				? `Search: "${data.query}" — Neuralwire Archives`
 				: 'Search AI News & Research Archives',
 			category: 'Search'
 		})
@@ -92,7 +91,7 @@
 	<!-- Page Header & Input -->
 	<div class="mb-12 border-b border-[rgba(255,255,255,0.08)] pb-8">
 		<span class="tag-mono mb-2 block text-xs font-bold tracking-widest text-[#22D3EE]"
-			>SYSTEM // SEARCH_ARCHIVES</span
+			>SEARCH FEED</span
 		>
 		<h1 class="mb-6 font-serif text-3xl font-medium text-white">INDEX RECONSTRUCTION</h1>
 
@@ -156,13 +155,6 @@
 							alt={post.title}
 							class="h-full w-full object-cover opacity-75 transition-all duration-550 group-hover:scale-105 group-hover:opacity-100"
 						/>
-						<div class="absolute top-2 right-2">
-							<BookmarkButton
-								article={post}
-								size="sm"
-								class="rounded border border-white/10 bg-[#0A0E17]/90 p-1 backdrop-blur-sm hover:border-[#22D3EE]/50 hover:bg-[#0A0E17]"
-							/>
-						</div>
 					</a>
 
 					<!-- Card Body -->
