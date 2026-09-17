@@ -197,12 +197,14 @@ export interface TrendingResponse {
 	data: TrendingArticle[];
 }
 
+export type TrendingWindow = 'day' | 'week' | 'month' | 'all';
+
 /**
  * Fetch trending news articles.
  */
 export async function getTrendingNews(
 	customFetch?: typeof fetch,
-	window: string = 'week',
+	window: TrendingWindow | string = 'week',
 	limit: number = 10
 ): Promise<TrendingArticle[]> {
 	const f = getFetch(customFetch);

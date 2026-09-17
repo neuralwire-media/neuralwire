@@ -494,7 +494,7 @@ func (s *Server) serveIndexHTML(w http.ResponseWriter, r *http.Request) {
 
 	if cleanPath == "" || cleanPath == "index.html" {
 		extraPreloads.WriteString("\t\t<link rel=\"preload\" as=\"fetch\" href=\"/api/news?page_size=15\" crossorigin>\n")
-		extraPreloads.WriteString("\t\t<link rel=\"preload\" as=\"fetch\" href=\"/api/news/trending?window=week&limit=5\" crossorigin>\n")
+		extraPreloads.WriteString("\t\t<link rel=\"preload\" as=\"fetch\" href=\"/api/news/trending?window=week&limit=10\" crossorigin>\n")
 
 		homeTitle := "NeuralWire | AI News, Neural Networks & Future Computation"
 		homeDesc := "Curated intelligence on frontier AI research, neural networks, machine learning, and computational industry."

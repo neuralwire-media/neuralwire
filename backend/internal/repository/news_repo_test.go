@@ -253,3 +253,39 @@ func TestBulkDeleteCleansUpArticleViews(t *testing.T) {
 		t.Errorf("expected 0 orphaned views after bulk delete, got %d", count)
 	}
 }
+
+func TestListTrendingWindows(t *testing.T) {
+	repo := newTestDB(t)
+
+	id, err := repo.Create(models.News{
+		Title:    "Trending Frontier Model",
+		URL:      "https://example.com/trending-frontier",
+		Category: "ai",
+	})
+	if err != nil {
+		t.Fatalf("create news: %v", err)
+	}
+	if err := repo.SetStatus(id, models.StatusPublished); err != nil {
+		t.Fatalf("set status: %v", err)
+	}
+
+	if err := repo.RecordView(id, "viewer-1"); err != nil {
+		t.Fatalf("record view: %v", err)
+	}
+
+	for _, w := range []TrendingWindow{TrendingDay, TrendingWeek, TrendingMonth, TrendingAll} {
+		trending, err := repo.ListTrending(w, 10)
+		if err != nil {
+			t.Fatalf("ListTrending(%s) err: %v", w, err)
+		}
+		if len(trending) != 1 {
+			t.Fatalf("ListTrending(%s) count = %d, want 1", w, len(trending))
+		}
+		if trending[0].ID != id {
+			t.Errorf("ListTrending(%s) id = %d, want %d", w, trending[0].ID, id)
+		}
+		if trending[0].ViewCount != 1 {
+			t.Errorf("ListTrending(%s) view count = %d, want 1", w, trending[0].ViewCount)
+		}
+	}
+}
