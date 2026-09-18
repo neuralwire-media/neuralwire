@@ -246,7 +246,7 @@ func etagMatches(header, etag string) bool {
 //   - /api/health and /api/admin/* are never cached (sensitive / monitoring)
 //   - /api/categories is cached for 5 minutes (rarely changes)
 //   - /api/news/trending is server-cached for minutes, so browsers and CDNs may reuse it
-//   - /robots.txt is cached for 1 day
+//   - /robots.txt is marked no-cache so crawlers always receive real-time rules
 //   - /sitemap.xml is cached for 1 hour
 //   - static assets (including /site.webmanifest, favicons, /uploads/) are cached for 30 days
 //   - immutable assets (/_app/immutable/*) are cached for 1 year
@@ -263,7 +263,7 @@ func (s *Server) cacheControl(next http.Handler) http.Handler {
 		case path == "/api/news/trending":
 			w.Header().Set("Cache-Control", "public, max-age=60, stale-while-revalidate=60")
 		case path == "/robots.txt":
-			w.Header().Set("Cache-Control", "public, max-age=86400")
+			w.Header().Set("Cache-Control", "no-cache")
 		case path == "/sitemap.xml":
 			w.Header().Set("Cache-Control", "public, max-age=3600")
 		case strings.HasPrefix(path, "/_app/immutable/"):
