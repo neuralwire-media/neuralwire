@@ -333,6 +333,7 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("X-Robots-Tag", "noindex")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		s.slog.Error("api: encode response", "error", err)
@@ -493,7 +494,7 @@ func (s *Server) serveIndexHTML(w http.ResponseWriter, r *http.Request) {
 	var preloadImage string
 
 	if cleanPath == "" || cleanPath == "index.html" {
-		extraPreloads.WriteString("\t\t<link rel=\"preload\" as=\"fetch\" href=\"/api/news?page_size=16\" crossorigin>\n")
+		extraPreloads.WriteString("\t\t<link rel=\"preload\" as=\"fetch\" href=\"/api/news?page=1&page_size=16\" crossorigin>\n")
 		extraPreloads.WriteString("\t\t<link rel=\"preload\" as=\"fetch\" href=\"/api/news/trending?window=week&limit=10\" crossorigin>\n")
 
 		homeTitle := "NeuralWire | AI News, Neural Networks & Future Computation"

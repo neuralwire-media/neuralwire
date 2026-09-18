@@ -351,11 +351,12 @@ func randomHex(n int) (string, error) {
 // single block, disable that setting (Bots -> Managed robots.txt -> Off).
 func (s *Server) handleRobotsTXT(w http.ResponseWriter, r *http.Request) {
 	origin := s.sitemapOrigin(r)
-	body := "# allow crawling everywhere except admin, search, and internal api\n" +
+	body := "# allow crawling everywhere except admin, search, and admin api\n" +
 		"User-agent: *\n" +
 		"Disallow: /admin\n" +
 		"Disallow: /search\n" +
-		"Disallow: /api/\n" +
+		"Disallow: /api/admin/\n" +
+		"Allow: /api/\n" +
 		"Allow: /\n\n" +
 		"# Block AI training / scraping crawlers\n" +
 		"User-agent: Amazonbot\nDisallow: /\n" +
