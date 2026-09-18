@@ -1503,8 +1503,11 @@ func TestSitemapAndRobots(t *testing.T) {
 	if !strings.Contains(robotsBody, "Disallow: /search") {
 		t.Errorf("robots.txt missing Disallow: /search")
 	}
-	if !strings.Contains(robotsBody, "Disallow: /api/") {
-		t.Errorf("robots.txt missing Disallow: /api/")
+	if !strings.Contains(robotsBody, "Disallow: /api/admin/") {
+		t.Errorf("robots.txt missing Disallow: /api/admin/")
+	}
+	if !strings.Contains(robotsBody, "Allow: /api/") {
+		t.Errorf("robots.txt missing Allow: /api/")
 	}
 }
 
@@ -1619,7 +1622,7 @@ func TestStaticFallbackRouting(t *testing.T) {
 		t.Errorf("GET / = %d, want 200", rec.Code)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, `<link rel="preload" as="fetch" href="/api/news?page_size=16" crossorigin>`) {
+	if !strings.Contains(body, `<link rel="preload" as="fetch" href="/api/news?page=1&page_size=16" crossorigin>`) {
 		t.Errorf("GET / missing news API preload, got: %s", body)
 	}
 	if !strings.Contains(body, `<link rel="preload" as="fetch" href="/api/news/trending?window=week&limit=10" crossorigin>`) {
