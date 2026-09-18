@@ -1792,7 +1792,7 @@ func TestCacheControlHeaders(t *testing.T) {
 		{"/api/healthz", "no-store"},
 		{"/api/news/trending", "public, max-age=60, stale-while-revalidate=60"},
 		{"/api/categories", "public, max-age=300, stale-while-revalidate=60"},
-		{"/robots.txt", "public, max-age=86400"},
+		{"/robots.txt", "no-cache"},
 		{"/sitemap.xml", "public, max-age=3600"},
 	}
 
