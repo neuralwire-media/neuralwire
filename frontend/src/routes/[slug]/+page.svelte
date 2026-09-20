@@ -6,6 +6,7 @@
 	import { absoluteUrl, getSiteUrl } from '$lib/siteUrl';
 	import { BASE_URL } from '$lib/api';
 	import { getOgImageUrl } from '$lib/og';
+	import { cleanMetaDescription } from '$lib/seo';
 
 	let { data }: { data: PageData } = $props();
 
@@ -65,6 +66,8 @@
 	// site as an Organization (web curator), avoiding fictional authors. `</`
 	// is escaped so a value containing the closing tag sequence cannot break
 	// out of the tag.
+	const metaDescription = $derived(cleanMetaDescription(article.summary || article.title, 160));
+
 	const articleJsonLdHtml = $derived(
 		'<scr' +
 			'ipt type="application/ld+json">' +
@@ -72,6 +75,7 @@
 				'@context': 'https://schema.org',
 				'@type': 'NewsArticle',
 				headline: article.title,
+				description: metaDescription,
 				image: [absoluteUrl(article.image_url)],
 				datePublished: article.published_at || article.created_at,
 				dateModified: article.published_at || article.created_at,
@@ -288,12 +292,12 @@
 
 <svelte:head>
 	<title>{article.title} | NeuralWire</title>
-	<meta name="description" content={article.summary} />
+	<meta name="description" content={metaDescription} />
 	<meta name="robots" content="index, follow" />
 	<link rel="canonical" href="{getSiteUrl()}/{article.slug}" />
 	<!-- Article Specific OG (Branded Social Card First) -->
 	<meta property="og:title" content={article.title} />
-	<meta property="og:description" content={article.summary} />
+	<meta property="og:description" content={metaDescription} />
 	<meta property="og:type" content="article" />
 	<meta property="og:url" content="{getSiteUrl()}/{article.slug}" />
 	<meta property="og:image" content={socialOgImageUrl} />
@@ -302,7 +306,7 @@
 	<!-- Twitter Card -->
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={article.title} />
-	<meta name="twitter:description" content={article.summary} />
+	<meta name="twitter:description" content={metaDescription} />
 	<meta name="twitter:image" content={socialOgImageUrl} />
 	<!-- Structured data: NewsArticle -->
 	{@html articleJsonLdHtml}

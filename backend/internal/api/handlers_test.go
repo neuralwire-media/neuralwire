@@ -2313,3 +2313,64 @@ func TestClusterAPIEndpoints(t *testing.T) {
 		t.Errorf("id1 is_primary = true after promotion, want false")
 	}
 }
+
+func TestCleanMetaDescription(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		maxLen   int
+		expected string
+	}{
+		{
+			name:     "empty input",
+			input:    "",
+			maxLen:   160,
+			expected: "",
+		},
+		{
+			name:     "whitespace only",
+			input:    "   \n\t  \r\n  ",
+			maxLen:   160,
+			expected: "",
+		},
+		{
+			name:     "normalize whitespace without truncation when maxLen is 0",
+			input:    "Line 1.\n\nLine 2 with \t multiple    spaces.\r\nLine 3.",
+			maxLen:   0,
+			expected: "Line 1. Line 2 with multiple spaces. Line 3.",
+		},
+		{
+			name:     "short string untouched",
+			input:    "Curated intelligence on frontier AI research.",
+			maxLen:   160,
+			expected: "Curated intelligence on frontier AI research.",
+		},
+		{
+			name:     "long summary truncated cleanly at word boundary",
+			input:    "Co-Scientist, an AI tool developed by Google researchers, is being used to accelerate aging research by generating novel genetic leads and rapidly analyzing complex screening data. It proposed over 20 plausible genetic factors for reversing cellular senescence, two of which were validated in lab tests, and reduced a six-month data interpretation process to just days.\n\nFor the tech and biotech industries, this demonstrates how AI agents can slash research timelines by automating literature synthesis and hypothesis generation, enabling faster translation of complex biological data into actionable experiments.",
+			maxLen:   160,
+			expected: "Co-Scientist, an AI tool developed by Google researchers, is being used to accelerate aging research by generating novel genetic leads and rapidly analyzing...",
+		},
+		{
+			name:     "trailing punctuation trimmed before ellipsis",
+			input:    "Alpha, Beta, Gamma, Delta, Epsilon, Zeta, Eta, Theta, Iota, Kappa, Lambda, Mu, Nu, Xi, Omicron, Pi, Rho, Sigma, Tau, Upsilon, Phi, Chi, Psi, Omega - All in order.",
+			maxLen:   60,
+			expected: "Alpha, Beta, Gamma, Delta, Epsilon, Zeta, Eta, Theta...",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := cleanMetaDescription(tc.input, tc.maxLen)
+			if got != tc.expected {
+				t.Errorf("cleanMetaDescription() = %q, want %q", got, tc.expected)
+			}
+			if tc.maxLen > 0 && len([]rune(got)) > tc.maxLen {
+				t.Errorf("len(got) = %d > maxLen %d", len([]rune(got)), tc.maxLen)
+			}
+			if strings.ContainsAny(got, "\r\n\t") {
+				t.Errorf("got contains raw newline or tab: %q", got)
+			}
+		})
+	}
+}

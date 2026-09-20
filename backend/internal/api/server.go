@@ -450,6 +450,36 @@ func calculateReadingTime(text string) string {
 	return fmt.Sprintf("%d min read", minutes)
 }
 
+// cleanMetaDescription normalizes whitespace (stripping newlines, tabs, and
+// multiple spaces) and optionally truncates at a clean word boundary without
+// exceeding maxLen characters, ending with an ellipsis. If maxLen <= 0, it
+// performs whitespace normalization without truncation.
+func cleanMetaDescription(text string, maxLen int) string {
+	fields := strings.Fields(strings.TrimSpace(text))
+	if len(fields) == 0 {
+		return ""
+	}
+	cleaned := strings.Join(fields, " ")
+	runes := []rune(cleaned)
+
+	if maxLen <= 0 || len(runes) <= maxLen {
+		return cleaned
+	}
+
+	target := maxLen - 3
+	if target <= 0 {
+		return string(runes[:maxLen])
+	}
+
+	sub := string(runes[:target])
+	lastSpace := strings.LastIndex(sub, " ")
+	if lastSpace > 0 {
+		sub = sub[:lastSpace]
+	}
+	sub = strings.TrimRight(sub, " ,;:.-–—")
+	return sub + "..."
+}
+
 func injectSEOTags(content []byte, pageTitle, desc, pageURL, imageURL, ogType string) []byte {
 	if pageTitle != "" {
 		content = titleTagRegex.ReplaceAll(content, []byte("<title>"+html.EscapeString(pageTitle)+"</title>"))
@@ -457,9 +487,10 @@ func injectSEOTags(content []byte, pageTitle, desc, pageURL, imageURL, ogType st
 		content = metaTwTitleRegex.ReplaceAll(content, []byte(`<meta name="twitter:title" content="`+html.EscapeString(pageTitle)+`" />`))
 	}
 	if desc != "" {
-		content = metaDescRegex.ReplaceAll(content, []byte(`<meta name="description" content="`+html.EscapeString(desc)+`" />`))
-		content = metaOgDescRegex.ReplaceAll(content, []byte(`<meta property="og:description" content="`+html.EscapeString(desc)+`" />`))
-		content = metaTwDescRegex.ReplaceAll(content, []byte(`<meta name="twitter:description" content="`+html.EscapeString(desc)+`" />`))
+		cleanDesc := cleanMetaDescription(desc, 0)
+		content = metaDescRegex.ReplaceAll(content, []byte(`<meta name="description" content="`+html.EscapeString(cleanDesc)+`" />`))
+		content = metaOgDescRegex.ReplaceAll(content, []byte(`<meta property="og:description" content="`+html.EscapeString(cleanDesc)+`" />`))
+		content = metaTwDescRegex.ReplaceAll(content, []byte(`<meta name="twitter:description" content="`+html.EscapeString(cleanDesc)+`" />`))
 	}
 	if pageURL != "" {
 		content = metaOgURLRegex.ReplaceAll(content, []byte(`<meta property="og:url" content="`+html.EscapeString(pageURL)+`" />`))
@@ -556,9 +587,9 @@ func (s *Server) serveIndexHTML(w http.ResponseWriter, r *http.Request) {
 					preloadImage = article.ImageURL
 				}
 				articleTitle := fmt.Sprintf("%s | NeuralWire", article.Title)
-				articleDesc := article.Summary
+				articleDesc := cleanMetaDescription(article.Summary, 160)
 				if articleDesc == "" {
-					articleDesc = article.Title
+					articleDesc = cleanMetaDescription(article.Title, 160)
 				}
 				pageURL := fmt.Sprintf("https://neuralwire.info/%s", article.Slug)
 				readTime := calculateReadingTime(article.Summary)

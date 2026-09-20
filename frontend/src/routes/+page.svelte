@@ -226,11 +226,16 @@
 </script>
 
 <svelte:head>
+	<title>NeuralWire | AI News, Neural Networks & Future Computation</title>
+	<meta
+		name="description"
+		content="Curated intelligence on frontier AI research, neural networks, machine learning, and computational industry."
+	/>
 	<link rel="canonical" href="{getSiteUrl()}/" />
-	<meta property="og:title" content="NeuralWire | AI News & Editorial" />
+	<meta property="og:title" content="NeuralWire | AI News, Neural Networks & Future Computation" />
 	<meta
 		property="og:description"
-		content="An editorial news portal for artificial intelligence, neural networks, and the future of computation."
+		content="Curated intelligence on frontier AI research, neural networks, machine learning, and computational industry."
 	/>
 	<meta property="og:type" content="website" />
 	<meta property="og:url" content="{getSiteUrl()}/" />
@@ -238,10 +243,10 @@
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
 	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content="NeuralWire | AI News & Editorial" />
+	<meta name="twitter:title" content="NeuralWire | AI News, Neural Networks & Future Computation" />
 	<meta
 		name="twitter:description"
-		content="An editorial news portal for artificial intelligence, neural networks, and the future of computation."
+		content="Curated intelligence on frontier AI research, neural networks, machine learning, and computational industry."
 	/>
 	<meta name="twitter:image" content={homeOgImage} />
 </svelte:head>
